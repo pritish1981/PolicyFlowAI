@@ -1,0 +1,94 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: policyflow-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-policyflow}
+      POSTGRES_USER: ${POSTGRES_USER:-policyflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - policyflow_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: policyflow-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+     context: .
+     dockerfile: backend/Dockerfile
+    environment:
+      APP_NAME: ${APP_NAME:-PolicyFlow AI}
+      APP_ENV: ${APP_ENV:-local}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-policyflow}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-policyflow}
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      POLICY_ADMIN_TOKEN: ${POLICY_ADMIN_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      MODEL_TIMEOUT_SECONDS: ${MODEL_TIMEOUT_SECONDS:-30}
+      MODEL_MAX_RETRIES: ${MODEL_MAX_RETRIES:-2}
+      MAX_OUTPUT_TOKENS: ${MAX_OUTPUT_TOKENS:-1000}
+      THREAD_TOKEN_BUDGET: ${THREAD_TOKEN_BUDGET:-12000}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-jinaai/jina-embeddings-v2-small-en}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-512}
+      RERANK_PROVIDER: ${RERANK_PROVIDER:-cohere}
+      COHERE_API_KEY: ${COHERE_API_KEY:-}
+      COHERE_RERANK_MODEL: ${COHERE_RERANK_MODEL:-rerank-v4.0-pro}
+      BGE_RERANK_MODEL: ${BGE_RERANK_MODEL:-BAAI/bge-reranker-base}
+      RRF_K: ${RRF_K:-60}
+      RETRIEVAL_TOP_N: ${RETRIEVAL_TOP_N:-20}
+      RERANK_TOP_K: ${RERANK_TOP_K:-5}
+      RERANK_FALLBACK_TO_RRF: ${RERANK_FALLBACK_TO_RRF:-true}
+      CITATION_REQUIRED: ${CITATION_REQUIRED:-true}
+      CITATION_EXCERPT_CHARS: ${CITATION_EXCERPT_CHARS:-600}
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+       [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    container_name: policyflow-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  policyflow_postgres_data:

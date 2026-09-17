@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build / reports
+coverage.xml
+htmlcov/
+evaluation/reports/*
+!evaluation/reports/.gitkeep
+
+# Policy processing output
+policies/processed/*
+!policies/processed/.gitkeep

@@ -1,0 +1,11 @@
+name: RAG Evaluation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Implement in OpenSpec change 007-observability-evaluation"
