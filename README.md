@@ -1,16 +1,17 @@
 # PolicyFlow AI
 
-PolicyFlow AI is an **Enterprise Expense Compliance and Exception Agent** proof of concept. The current application answers natural-language expense-policy questions from eligible policy evidence, validates every returned citation against PostgreSQL, and abstains when verified evidence is insufficient.
+PolicyFlow AI is an **Enterprise Expense Compliance and Exception Agent** proof of concept. The current application answers policy questions and assesses structured expenses against verified policy evidence.
 
-The [FRD](docs/requirements/PolicyFlow_AI_FRD_v1.0.docx), [HLD](docs/architecture/PolicyFlow_AI_HLD_v1.0.docx), and [LLD](docs/architecture/PolicyFlow_AI_LLD_v1.0.docx) define the broader target. This repository currently implements Phases 001 through 003 only.
+The [FRD](docs/requirements/PolicyFlow_AI_FRD_v1.0.docx), [HLD](docs/architecture/PolicyFlow_AI_HLD_v1.0.docx), and [LLD](docs/architecture/PolicyFlow_AI_LLD_v1.0.docx) define the broader target. Phase 004 is implemented and its OpenSpec change is archived; the working-tree changes have not been committed or published. Follow the [Phase 004 local validation guide](docs/phase-004-local-validation.md) for current commands and expected results. The Phase 003 runbook below is historical and retains its Phase 003 baselines.
 
 ## Current implementation status
 
 - **Phase 001 - Platform foundation:** FastAPI, React/TypeScript/Vite, PostgreSQL 16 with pgvector, Redis, SQLAlchemy, Alembic, health/readiness probes, Docker Compose, and CI foundation. Archived under [`2026-09-13-001-platform-foundation`](openspec/changes/archive/2026-09-13-001-platform-foundation/).
 - **Phase 002 - Policy ingestion and hybrid RAG:** six synthetic policies, section-aware ingestion, PostgreSQL full-text search, pgvector retrieval, deterministic eligibility filters, Reciprocal Rank Fusion (RRF), Cohere/BGE adapters, and authoritative citation lookup. Archived under [`2026-09-13-002-policy-ingestion-and-hybrid-rag`](openspec/changes/archive/2026-09-13-002-policy-ingestion-and-hybrid-rag/).
 - **Phase 003 - Policy Q&A:** strict question/answer contracts, a Policy Q&A service, minimal LangGraph workflow, governed Model Gateway, OpenAI structured output, deterministic citation validation, safe abstention, structured stage logging, a React question-and-citation experience, and credential-free automated tests. All 27 implementation tasks are complete. The main [`policy-qa` spec](openspec/specs/policy-qa/spec.md) is synced, and the change is archived under [`2026-09-17-003-policy-qa`](openspec/changes/archive/2026-09-17-003-policy-qa/).
+- **Phase 004 - Expense compliance assessment:** structured expense intake, clarification and idempotency, separate expense and assessment records, evidence-grounded rule extraction, deterministic Decimal decisions, and a React expense view. The main [`expense-compliance` spec](openspec/specs/expense-compliance/spec.md) is synced and the [`004-expense-compliance-assessment` change](openspec/changes/archive/2026-09-18-004-expense-compliance-assessment/tasks.md) is archived with 19/19 tasks checked. Local automated verification passed; live model generation and browser visual behavior require optional manual checks.
 
-Phase 003 does **not** implement expense submission decisions, `COMPLIANT`/`NON_COMPLIANT` evaluation, exceptions, reviewer workflows, human interrupt/resume, or autonomous approvals. Those remain Phase 004+ work.
+Phase 004 stops at `NEEDS_REVIEW` with a next action. Exception justification, reviewer actions, human interrupt/resume, and autonomous approvals are outside this phase.
 
 ## Phase 003 request flow
 

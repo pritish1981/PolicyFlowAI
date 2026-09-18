@@ -20,9 +20,9 @@ router = APIRouter(prefix="/api/v1/policy", tags=["policy"])
 
 
 @lru_cache(maxsize=1)
-def get_policy_service() -> PolicyService:
+def get_policy_service() -> PolicyService | None:
     if not settings.openai_api_key:
-        raise ModelUnavailableError("OPENAI_API_KEY is not configured")
+        return None
     gateway = ModelGateway(OpenAIProvider(settings.openai_api_key,
                                           settings.model_timeout_seconds))
     return PolicyService(PolicyQADependencies(session_factory=SessionLocal, gateway=gateway))
@@ -31,9 +31,11 @@ def get_policy_service() -> PolicyService:
 @router.post("/query", response_model=PolicyAnswerResponse)
 async def query_policy(request: PolicyQueryRequest,
                        x_request_id: str | None = Header(default=None, alias="X-Request-ID"),
-                       service: PolicyService = Depends(get_policy_service)) -> PolicyAnswerResponse:
+                       service: PolicyService | None = Depends(get_policy_service)) -> PolicyAnswerResponse:
     request_id = x_request_id.strip() if x_request_id and x_request_id.strip() else str(uuid4())
     try:
+        if service is None:
+            raise ModelUnavailableError("OPENAI_API_KEY is not configured")
         return await service.query(request, request_id=request_id)
     except (ModelUnavailableError, RerankerUnavailableError,
             RetrievalUnavailableError, StructuredOutputError) as exc:

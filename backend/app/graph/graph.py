@@ -18,6 +18,7 @@ from app.rag.retrieval.hybrid_retriever import (
 )
 from app.rag.retrieval.rrf import SearchHit, fuse
 from app.schemas.policy import EvidenceStatus, GroundedPolicyAnswer, SAFE_ABSTENTION
+from app.graph.expense_graph import ExpenseDependencies, build_expense_graph
 
 logger = logging.getLogger(__name__)
 

@@ -36,3 +36,26 @@ export interface PolicyAnswerResponse {
   citations: PolicyCitation[];
   evidence_status: EvidenceStatus;
 }
+
+export type ExpenseDecision = "COMPLIANT" | "NON_COMPLIANT" | "NEEDS_REVIEW" | "INSUFFICIENT_INFORMATION";
+export interface ExpenseRequest {
+  expense_type?: "HOTEL" | "MEAL" | "TAXI";
+  amount?: string;
+  currency?: "INR";
+  location?: string;
+  travel_type?: "DOMESTIC" | "INTERNATIONAL";
+  purpose?: string;
+  receipt_available?: boolean;
+}
+export interface ExpenseAssessment {
+  expense_id: string;
+  thread_id: string;
+  request_id: string;
+  decision: ExpenseDecision;
+  policy_limit: string | null;
+  confidence: string;
+  explanation: string;
+  citations: PolicyCitation[];
+  next_action: "NONE" | "PROVIDE_CLARIFICATION" | "SUBMIT_EXCEPTION_JUSTIFICATION" | "RETRY_LATER";
+  missing_fields: string[];
+}

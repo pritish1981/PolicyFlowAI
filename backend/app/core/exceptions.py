@@ -23,3 +23,7 @@ class RerankerUnavailableError(PolicyFlowError):
 class RetrievalUnavailableError(PolicyFlowError):
     code = "POLICY_RETRIEVAL_UNAVAILABLE"
     retryable = True
+
+
+class IdempotencyConflictError(PolicyFlowError):
+    code = "IDEMPOTENCY_CONFLICT"

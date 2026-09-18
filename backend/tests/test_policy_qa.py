@@ -332,6 +332,26 @@ def test_api_grounded_abstention_validation_and_503():
     app.dependency_overrides.clear()
 
 
+def test_api_missing_model_key_returns_controlled_503(monkeypatch):
+    monkeypatch.setattr(settings, "openai_api_key", None)
+    get_policy_service.cache_clear()
+    try:
+        response = TestClient(app).post(
+            "/api/v1/policy/query",
+            headers={"X-Request-ID": "missing-key-1"},
+            json={"question": "What is the hotel limit?"},
+        )
+        assert response.status_code == 503
+        assert response.json()["detail"] == {
+            "code": "MODEL_TEMPORARILY_UNAVAILABLE",
+            "message": "Policy Q&A is temporarily unavailable.",
+            "request_id": "missing-key-1",
+            "retryable": True,
+        }
+    finally:
+        get_policy_service.cache_clear()
+
+
 def test_openapi_has_one_policy_query_operation():
     paths = app.openapi()["paths"]
     assert list(paths["/api/v1/policy/query"]) == ["post"]

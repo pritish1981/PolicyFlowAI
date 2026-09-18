@@ -20,7 +20,7 @@ button { font: inherit; }
 .qa-intro > p:last-child { color: #58677e; font-size: 18px; line-height: 1.6; }
 .policy-form { display: grid; gap: 14px; max-width: 800px; margin-top: 34px; padding: 26px; border: 1px solid #dce3ef; border-radius: 18px; background: #fff; box-shadow: 0 14px 38px rgba(32, 54, 96, .06); }
 .policy-form label { color: #263a5c; font-size: 14px; font-weight: 700; }
-.policy-form textarea, .policy-form input { width: 100%; margin-top: 7px; padding: 12px 14px; border: 1px solid #becae0; border-radius: 9px; color: #16233b; background: #fbfcff; font: inherit; }
+.policy-form textarea, .policy-form input, .policy-form select { width: 100%; margin-top: 7px; padding: 12px 14px; border: 1px solid #becae0; border-radius: 9px; color: #16233b; background: #fbfcff; font: inherit; }
 .policy-form textarea:focus, .policy-form input:focus { outline: 3px solid #acc2ff; border-color: #426bd0; }
 .filter-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .policy-form button { justify-self: start; padding: 12px 18px; border: 0; border-radius: 9px; color: #fff; background: #234db7; font-weight: 700; cursor: pointer; }
@@ -33,6 +33,13 @@ button { font: inherit; }
 .answer-card > p { color: #3f4f68; line-height: 1.65; }
 .evidence-badge { display: inline-flex; padding: 5px 9px; border-radius: 999px; color: #166641; background: #e4f7ed; font-size: 11px; font-weight: 800; letter-spacing: .06em; }
 .answer-card--abstain .evidence-badge { color: #8b4a20; background: #fff0df; }
+.expense-result--compliant { border-color: #a9dbc1; }
+.expense-result--non_compliant { border-color: #e5aaa6; background: #fffafa; }
+.expense-result--non_compliant .evidence-badge { color: #963b36; background: #fcebea; }
+.expense-result--needs_review { border-color: #ead399; background: #fffdf6; }
+.expense-result--needs_review .evidence-badge { color: #795617; background: #fff1c9; }
+.expense-result--insufficient_information { border-color: #c7d1e2; }
+.expense-result--insufficient_information .evidence-badge { color: #425875; background: #edf2f8; }
 .citations { margin-top: 26px; border-top: 1px solid #e4e9f2; padding-top: 22px; }
 .citations h3 { margin: 0 0 14px; }
 .citation-grid { display: grid; gap: 12px; }

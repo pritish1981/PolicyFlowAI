@@ -19,7 +19,7 @@ SessionLocal = sessionmaker(bind=engine)
 def test_policy_migration_indexes():
     with engine.connect() as connection:
         revision = connection.scalar(text("SELECT version_num FROM alembic_version"))
-        assert revision == "20260913_0002"
+        assert revision == "20260917_0003"
         rows = connection.execute(text(
             "SELECT indexname FROM pg_indexes WHERE schemaname = 'rag' "
             "AND tablename IN ('policy_document', 'policy_chunk')"

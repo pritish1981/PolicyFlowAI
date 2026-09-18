@@ -28,3 +28,19 @@ class PolicyQAState(TypedDict, total=False):
     model_usage: dict[str, Any]
     rerank_fallback: bool
     errors: list[str]
+
+
+class ExpenseState(TypedDict, total=False):
+    """Compact persisted expense path; authoritative money stays in app.expense."""
+    scenario: Literal["expense_assessment"]
+    expense_id: str
+    thread_id: str
+    request_id: str
+    expense: dict[str, Any]
+    assessment_date: str
+    missing_fields: list[str]
+    hits: list[str]
+    rules: dict[str, Any] | None
+    citations: list[dict[str, Any]]
+    decision: dict[str, Any]
+    model_name: str | None

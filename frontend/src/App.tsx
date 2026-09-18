@@ -2,6 +2,7 @@ import { StatusCard } from "./components/StatusCard";
 import { usePlatformStatus } from "./hooks/usePlatformStatus";
 import "./App.css";
 import { PolicyQAPage } from "./pages/PolicyQAPage";
+import { ExpensePage } from "./pages/ExpensePage";
 
 export default function App() {
   const { status, refresh } = usePlatformStatus();
@@ -14,6 +15,7 @@ export default function App() {
       </header>
 
       <PolicyQAPage />
+      <ExpensePage />
 
       <section className="system-panel system-panel--compact" aria-labelledby="system-title">
         <div className="system-panel__heading">

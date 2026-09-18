@@ -6,9 +6,10 @@ from app.core.config import settings
 
 class ModelTask(StrEnum):
     POLICY_QA = "POLICY_QA"
+    EXPENSE_POLICY_RULE = "EXPENSE_POLICY_RULE"
 
 
 def route_model(task: ModelTask) -> str:
-    if task != ModelTask.POLICY_QA:
+    if task not in (ModelTask.POLICY_QA, ModelTask.EXPENSE_POLICY_RULE):
         raise ValueError(f"unsupported model task: {task}")
     return settings.openai_model
