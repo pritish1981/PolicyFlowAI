@@ -38,6 +38,11 @@ button { font: inherit; }
 .expense-result--non_compliant .evidence-badge { color: #963b36; background: #fcebea; }
 .expense-result--needs_review { border-color: #ead399; background: #fffdf6; }
 .expense-result--needs_review .evidence-badge { color: #795617; background: #fff1c9; }
+.exception-panel { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #d9e2e8; }
+.review-grid { display: grid; grid-template-columns: minmax(14rem, .8fr) minmax(20rem, 1.6fr); gap: 1rem; }
+.review-row { width: 100%; margin-bottom: .6rem; text-align: left; }
+.review-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1rem; }
+@media (max-width: 760px) { .review-grid { grid-template-columns: 1fr; } }
 .expense-result--insufficient_information { border-color: #c7d1e2; }
 .expense-result--insufficient_information .evidence-badge { color: #425875; background: #edf2f8; }
 .citations { margin-top: 26px; border-top: 1px solid #e4e9f2; padding-top: 22px; }

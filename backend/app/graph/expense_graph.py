@@ -1,7 +1,7 @@
 """Expense path: compact checkpoint state, verified evidence, deterministic decision."""
+import logging
 from dataclasses import dataclass
 from datetime import date
-import logging
 from typing import Callable
 from uuid import UUID
 
@@ -11,10 +11,13 @@ from sqlalchemy import select
 from app.gateway.model_gateway import ModelContext, ModelGateway
 from app.gateway.prompts import EXPENSE_RULE_PROMPT_VERSION, build_expense_rule_messages
 from app.gateway.routing import ModelTask
+from app.graph.nodes.collect_exception import collect_exception
+from app.graph.nodes.finalize_decision import finalize_decision
+from app.graph.nodes.human_review import human_review
 from app.graph.state import ExpenseState
-from app.rag.retrieval.rrf import SearchHit
 from app.models.policy_chunk import PolicyChunk
 from app.models.policy_document import PolicyDocument
+from app.rag.retrieval.rrf import SearchHit
 from app.rules.expense_rules import evaluate_expense_rules
 from app.schemas.expense import ExpenseCreate, PolicyRuleSet
 from app.services.expense_evidence import gather_expense_evidence
@@ -129,4 +132,17 @@ def build_expense_graph(deps: ExpenseDependencies, checkpointer=None):
     graph.add_edge("extract_rules", "verify_sources")
     graph.add_edge("verify_sources", "decide")
     graph.add_edge("decide", END)
+    return graph.compile(checkpointer=checkpointer)
+
+
+def build_exception_graph(checkpointer=None):
+    """Exception branch reuses the expense thread and PostgreSQL saver."""
+    graph = StateGraph(ExpenseState)
+    graph.add_node("collect_exception", collect_exception)
+    graph.add_node("human_review", human_review)
+    graph.add_node("finalize_decision", finalize_decision)
+    graph.add_edge(START, "collect_exception")
+    graph.add_edge("collect_exception", "human_review")
+    graph.add_edge("human_review", "finalize_decision")
+    graph.add_edge("finalize_decision", END)
     return graph.compile(checkpointer=checkpointer)

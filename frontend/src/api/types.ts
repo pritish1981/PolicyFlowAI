@@ -59,3 +59,23 @@ export interface ExpenseAssessment {
   next_action: "NONE" | "PROVIDE_CLARIFICATION" | "SUBMIT_EXCEPTION_JUSTIFICATION" | "RETRY_LATER";
   missing_fields: string[];
 }
+
+export type ExceptionStatus = "PENDING_REVIEW" | "MORE_INFORMATION_REQUIRED" | "APPROVED" | "REJECTED";
+export type ReviewDecision = "APPROVE" | "REJECT" | "REQUEST_MORE_INFORMATION";
+export interface ExceptionOutcome {
+  exception_id: string; expense_id: string; thread_id: string; status: ExceptionStatus;
+  variance_amount: string | null; next_action: "WAIT_FOR_REVIEW" | "PROVIDE_MORE_INFORMATION" | "COMPLETE";
+  reviewer_comments: string | null;
+}
+export interface ReviewListItem {
+  exception_id: string; expense_id: string; expense_type: string; amount: string; currency: string;
+  policy_limit: string | null; variance_amount: string | null; justification: string; created_at: string;
+}
+export interface ReviewSummary {
+  summary: string; key_facts: string[]; risk_or_attention_points: string[]; citation_chunk_ids: string[];
+}
+export interface ReviewDetail extends ReviewListItem {
+  thread_id: string; status: ExceptionStatus; purpose: string; location: string;
+  summary_status: "AVAILABLE" | "UNAVAILABLE" | "PENDING"; review_summary: ReviewSummary | null;
+  citations: PolicyCitation[]; information_history: string[]; latest_reviewer_comments: string | null;
+}

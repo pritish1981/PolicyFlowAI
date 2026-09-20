@@ -32,7 +32,7 @@ class PolicyQAState(TypedDict, total=False):
 
 class ExpenseState(TypedDict, total=False):
     """Compact persisted expense path; authoritative money stays in app.expense."""
-    scenario: Literal["expense_assessment"]
+    scenario: Literal["expense_assessment", "exception_review"]
     expense_id: str
     thread_id: str
     request_id: str
@@ -44,3 +44,14 @@ class ExpenseState(TypedDict, total=False):
     citations: list[dict[str, Any]]
     decision: dict[str, Any]
     model_name: str | None
+    exception_id: str
+    exception_justification: str
+    variance_amount: str | None
+    review_summary: dict[str, Any] | None
+    summary_status: str
+    reviewer_decision: str
+    reviewer_comments: str
+    reviewer_id: str
+    requires_human: bool
+    final_status: str
+    errors: list[str]

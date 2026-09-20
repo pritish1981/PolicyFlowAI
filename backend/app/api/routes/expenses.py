@@ -3,19 +3,29 @@ import logging
 from functools import lru_cache
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from psycopg import Error as PsycopgError
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.api.dependencies import demo_employee
+from app.api.routes.reviews import get_exception_service
 from app.core.config import settings
-from app.core.exceptions import (IdempotencyConflictError, ModelUnavailableError,
-                                 RetrievalUnavailableError, RerankerUnavailableError,
-                                 StructuredOutputError)
+from app.core.exceptions import (
+    ExceptionIneligibleError,
+    IdempotencyConflictError,
+    ModelUnavailableError,
+    RerankerUnavailableError,
+    RetrievalUnavailableError,
+    ReviewConflictError,
+    StructuredOutputError,
+)
 from app.db.session import SessionLocal
 from app.gateway.model_gateway import ModelGateway
 from app.gateway.providers.openai_provider import OpenAIProvider
 from app.graph.expense_graph import ExpenseDependencies
 from app.schemas.expense import ExpenseAssessmentResponse, ExpenseClarification, ExpenseCreate
+from app.schemas.review import ExceptionCreate, ExceptionOutcome
+from app.services.exception_service import ExceptionService
 from app.services.expense_service import ExpenseService
 
 router = APIRouter(prefix="/api/v1/expenses", tags=["expenses"])
@@ -74,3 +84,28 @@ async def clarify_expense(expense_id: UUID, request: ExpenseClarification,
     except (ModelUnavailableError, RetrievalUnavailableError, RerankerUnavailableError,
             StructuredOutputError, SQLAlchemyError, PsycopgError, OSError) as exc:
         raise _failure(exc, str(expense_id)) from exc
+
+
+@router.post("/{expense_id}/exceptions", response_model=ExceptionOutcome, status_code=201)
+async def submit_exception(expense_id: UUID, request: ExceptionCreate,
+                           response: Response,
+                           _employee: str = Depends(demo_employee),
+                           service: ExceptionService = Depends(get_exception_service)):
+    try:
+        result, created = await service.submit(expense_id, request.justification)
+        if not created:
+            response.status_code = 200
+            return result
+        return result
+    except LookupError as exc:
+        raise HTTPException(404, detail=str(exc)) from exc
+    except (ExceptionIneligibleError, ReviewConflictError) as exc:
+        raise HTTPException(409, detail=str(exc)) from exc
+
+
+@router.get("/{expense_id}", response_model=ExpenseAssessmentResponse)
+def get_expense(expense_id: UUID, service: ExpenseService = Depends(get_expense_service)):
+    result = service.get(expense_id)
+    if result is None:
+        raise HTTPException(404, detail="Expense not found")
+    return result

@@ -71,7 +71,7 @@ The system SHALL obtain schema-validated policy rules through the central Model 
 - **THEN** the API returns a controlled failure or safe insufficient-evidence result, never an unvalidated compliance decision
 
 ### Requirement: Deterministic expense decision
-The system SHALL evaluate money, mandatory receipts, explicit prohibitions, and exception conditions in application code using validated evidence-derived rules and decimal arithmetic. It SHALL return only `COMPLIANT`, `NON_COMPLIANT`, `NEEDS_REVIEW`, or `INSUFFICIENT_INFORMATION`; it SHALL not autonomously approve an exception.
+The system SHALL evaluate money, mandatory receipts, explicit prohibitions, and exception conditions in application code using validated evidence-derived rules and decimal arithmetic. It SHALL return only `COMPLIANT`, `NON_COMPLIANT`, `NEEDS_REVIEW`, or `INSUFFICIENT_INFORMATION`; it SHALL not autonomously approve an exception. A persisted `NEEDS_REVIEW` assessment SHALL remain the immutable assessment basis for a later human-owned exception outcome.
 
 #### Scenario: Within standard limit
 - **WHEN** an eligible expense is within its evidenced limit, required documentation is present, and all critical conditions are supported
@@ -79,7 +79,7 @@ The system SHALL evaluate money, mandatory receipts, explicit prohibitions, and 
 
 #### Scenario: Above standard limit
 - **WHEN** an eligible expense exceeds its evidenced limit and exception review is supported
-- **THEN** the decision is `NEEDS_REVIEW` with a review next action but no reviewer workflow started
+- **THEN** the decision is `NEEDS_REVIEW` with an exception-submission next action but no approval or rejection
 
 #### Scenario: Missing mandatory receipt or prohibition
 - **WHEN** verified policy evidence establishes a mandatory receipt that is absent or an explicit prohibition that applies
@@ -88,6 +88,10 @@ The system SHALL evaluate money, mandatory receipts, explicit prohibitions, and 
 #### Scenario: Incomplete or conflicting rules
 - **WHEN** critical rule evidence is missing, citations fail, or applicable rules materially conflict
 - **THEN** the decision is `INSUFFICIENT_INFORMATION` and no policy threshold is invented
+
+#### Scenario: Human exception outcome
+- **WHEN** an authorized reviewer later approves or rejects an exception for a `NEEDS_REVIEW` assessment
+- **THEN** the system exposes the human-owned exception outcome separately without rewriting the original deterministic assessment decision
 
 ### Requirement: Evidence-based confidence and traceability
 The system SHALL derive confidence from deterministic evidence and rule-coverage signals, make insufficient evidence override any model self-confidence, and record sanitized request, thread, expense, retrieval, rule, citation, and decision metadata without secrets or full policy documents.
@@ -101,7 +105,7 @@ The system SHALL derive confidence from deterministic evidence and rule-coverage
 - **THEN** confidence cannot promote the result to a material compliance decision
 
 ### Requirement: Expense assessment interface
-The frontend SHALL provide a structured expense form with validation, loading/error/clarification states and an assessment view showing decision, policy limit, confidence, explanation, next action, and verified citations.
+The frontend SHALL provide a structured expense form with validation, loading/error/clarification states and an assessment view showing decision, policy limit, confidence, explanation, next action, and verified citations. For `NEEDS_REVIEW`, it SHALL allow controlled exception submission and display later human-owned exception status without presenting pending review or AI-generated content as approval.
 
 #### Scenario: Assessment display
 - **WHEN** an assessment completes
@@ -110,3 +114,7 @@ The frontend SHALL provide a structured expense form with validation, loading/er
 #### Scenario: Clarification display
 - **WHEN** required information is missing
 - **THEN** the UI identifies the missing fields and allows the employee to supply them for the same expense
+
+#### Scenario: Exception continuation
+- **WHEN** a `NEEDS_REVIEW` assessment is eligible for exception handling
+- **THEN** the UI permits justification submission and displays pending, more-information-required, approved, or rejected exception status as a separate human-review outcome

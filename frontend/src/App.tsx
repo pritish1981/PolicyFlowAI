@@ -3,6 +3,7 @@ import { usePlatformStatus } from "./hooks/usePlatformStatus";
 import "./App.css";
 import { PolicyQAPage } from "./pages/PolicyQAPage";
 import { ExpensePage } from "./pages/ExpensePage";
+import { ReviewerPage } from "./pages/ReviewerPage";
 
 export default function App() {
   const { status, refresh } = usePlatformStatus();
@@ -16,6 +17,7 @@ export default function App() {
 
       <PolicyQAPage />
       <ExpensePage />
+      <ReviewerPage />
 
       <section className="system-panel system-panel--compact" aria-labelledby="system-title">
         <div className="system-panel__heading">

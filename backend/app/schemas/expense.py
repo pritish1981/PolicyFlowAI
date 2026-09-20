@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.schemas.policy import PolicyCitation
+from app.schemas.review import ExceptionOutcome
 
 
 class ExpenseType(StrEnum):
@@ -99,3 +100,4 @@ class ExpenseAssessmentResponse(BaseModel):
     citations: list[PolicyCitation] = Field(default_factory=list)
     next_action: Literal["NONE", "PROVIDE_CLARIFICATION", "SUBMIT_EXCEPTION_JUSTIFICATION", "RETRY_LATER"] = "NONE"
     missing_fields: list[str] = Field(default_factory=list)
+    exception: ExceptionOutcome | None = None

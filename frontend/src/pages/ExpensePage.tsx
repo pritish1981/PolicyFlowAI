@@ -2,6 +2,8 @@ import { useState } from "react";
 import { clarifyExpense, submitExpense } from "../api/expenseApi";
 import type { ExpenseAssessment, ExpenseRequest } from "../api/types";
 import { CitationPanel } from "../components/CitationPanel";
+import { addExceptionInformation, submitException } from "../api/reviewApi";
+import type { ExceptionOutcome } from "../api/types";
 
 const labels: Record<string, string> = {
   expense_type: "Expense type", amount: "Amount (INR)", currency: "Currency",
@@ -15,6 +17,8 @@ export function ExpensePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [key, setKey] = useState(() => crypto.randomUUID());
+  const [justification, setJustification] = useState("");
+  const [exception, setException] = useState<ExceptionOutcome | null>(null);
   const change = (patch: ExpenseRequest) => setForm(previous => ({ ...previous, ...patch }));
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -33,6 +37,22 @@ export function ExpensePage() {
       setResult(response);
       if (response.missing_fields.length === 0) setKey(crypto.randomUUID());
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Assessment failed."); }
+    finally { setBusy(false); }
+  }
+
+  async function sendException() {
+    if (!result) return;
+    setBusy(true); setError("");
+    try { setException(await submitException(result.expense_id, justification)); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Exception submission failed."); }
+    finally { setBusy(false); }
+  }
+
+  async function sendInformation() {
+    if (!exception) return;
+    setBusy(true); setError("");
+    try { setException(await addExceptionInformation(exception.exception_id, justification)); setJustification(""); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Information submission failed."); }
     finally { setBusy(false); }
   }
 
@@ -71,6 +91,19 @@ export function ExpensePage() {
       {result.policy_limit !== null && <p>Policy limit: INR {result.policy_limit}</p>}
       <p>Confidence: {result.confidence} · Next action: {result.next_action.replace(/_/g, " ")}</p>
       <CitationPanel citations={result.citations} />
+      {result.decision === "NEEDS_REVIEW" && !exception && <div className="exception-panel">
+        <label>Exception justification<textarea value={justification} minLength={20} maxLength={4000}
+          onChange={e => setJustification(e.target.value)} /></label>
+        <button type="button" disabled={busy || justification.trim().length < 20} onClick={sendException}>Submit for human review</button>
+      </div>}
+      {exception && <div className="exception-panel"><h3>Human review status</h3>
+        <p><strong>{exception.status.replace(/_/g, " ")}</strong></p>
+        {exception.variance_amount && <p>Policy variance: INR {exception.variance_amount}</p>}
+        {exception.reviewer_comments && <p>Reviewer comments: {exception.reviewer_comments}</p>}
+        {exception.status === "MORE_INFORMATION_REQUIRED" && <><label>Additional information
+          <textarea value={justification} minLength={10} maxLength={4000} onChange={e => setJustification(e.target.value)} />
+        </label><button type="button" disabled={busy || justification.trim().length < 10} onClick={sendInformation}>Return to reviewer</button></>}
+      </div>}
     </div>}
   </section>;
 }

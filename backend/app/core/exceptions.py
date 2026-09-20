@@ -27,3 +27,11 @@ class RetrievalUnavailableError(PolicyFlowError):
 
 class IdempotencyConflictError(PolicyFlowError):
     code = "IDEMPOTENCY_CONFLICT"
+
+
+class ReviewConflictError(PolicyFlowError):
+    code = "REVIEW_CONFLICT"
+
+
+class ExceptionIneligibleError(PolicyFlowError):
+    code = "EXCEPTION_INELIGIBLE"

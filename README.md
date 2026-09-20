@@ -11,7 +11,35 @@ The [FRD](docs/requirements/PolicyFlow_AI_FRD_v1.0.docx), [HLD](docs/architectur
 - **Phase 003 - Policy Q&A:** strict question/answer contracts, a Policy Q&A service, minimal LangGraph workflow, governed Model Gateway, OpenAI structured output, deterministic citation validation, safe abstention, structured stage logging, a React question-and-citation experience, and credential-free automated tests. All 27 implementation tasks are complete. The main [`policy-qa` spec](openspec/specs/policy-qa/spec.md) is synced, and the change is archived under [`2026-09-17-003-policy-qa`](openspec/changes/archive/2026-09-17-003-policy-qa/).
 - **Phase 004 - Expense compliance assessment:** structured expense intake, clarification and idempotency, separate expense and assessment records, evidence-grounded rule extraction, deterministic Decimal decisions, and a React expense view. The main [`expense-compliance` spec](openspec/specs/expense-compliance/spec.md) is synced and the [`004-expense-compliance-assessment` change](openspec/changes/archive/2026-09-18-004-expense-compliance-assessment/tasks.md) is archived with 19/19 tasks checked. Local automated verification passed; live model generation and browser visual behavior require optional manual checks.
 
-Phase 004 stops at `NEEDS_REVIEW` with a next action. Exception justification, reviewer actions, human interrupt/resume, and autonomous approvals are outside this phase.
+Phase 005 adds controlled exception handling after a persisted Phase 004 `NEEDS_REVIEW` assessment. Employees submit justification, deterministic code calculates variance, a neutral AI summary may assist the reviewer, LangGraph interrupts into PostgreSQL checkpoint storage, and a human reviewer selects `APPROVE`, `REJECT`, or `REQUEST_MORE_INFORMATION`. The human action is authoritative in business tables; the original assessment remains `NEEDS_REVIEW`, checkpoint state is not business truth, and the AI never approves or rejects.
+
+### Phase 005 local validation
+
+Start PostgreSQL and Redis from the repository root, then apply the new business migration from `backend`:
+
+```powershell
+docker compose up -d postgres redis
+cd backend
+uv run --no-project --python 3.12 --with-requirements requirements.txt python -m alembic upgrade head
+uv run --no-project --python 3.12 --with-requirements requirements.txt python -m alembic current
+uv run --no-project --python 3.12 --with-requirements requirements.txt python -m pytest -q tests/test_exception_hitl.py
+uv run --no-project --python 3.12 --with-requirements requirements.txt python -m pytest -q
+uv run --no-project --python 3.12 --with-requirements requirements.txt python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+From `frontend`, run `npm.cmd test`, `npm.cmd run build`, and `npm.cmd run dev`. In the expense UI, assess the synthetic HOTEL INR 9500 case against the INR 7000 limit, submit a justification of at least 20 characters, and confirm `PENDING REVIEW`. In the reviewer queue, inspect the verified policy citation and explicitly non-authoritative AI summary, then exercise each human action. `REQUEST_MORE_INFORMATION` returns the case to the employee and preserves the original exception/thread when information is resubmitted.
+
+The demo authorization headers are `X-Demo-Role: EMPLOYEE` for exception submission/follow-up and `X-Demo-Role: REVIEWER` plus optional `X-Demo-User: reviewer-demo` for reviewer APIs. The Phase 005 endpoints are:
+
+- `POST /api/v1/expenses/{expense_id}/exceptions`
+- `POST /api/v1/exceptions/{exception_id}/information`
+- `GET /api/v1/reviews/pending`
+- `GET /api/v1/reviews/{exception_id}`
+- `POST /api/v1/reviews/{exception_id}/decision`
+
+If Docker reports that `docker_engine` is unavailable, start Docker Desktop before migration or live checkpoint tests. Host PostgreSQL is exposed on port `5433`; the container uses `5432`. On Windows, keep the documented worker-thread `SelectorEventLoop` path for async psycopg checkpoint calls. No OpenAI credential is required for automated tests; without one, the reviewer receives authoritative facts with the summary marked unavailable.
+
+Phase 005 does not include autonomous approval, settlement, SSO, notifications, OCR, fraud detection, multi-agent orchestration, Phase 006 gateway hardening, Phase 007 evaluation expansion, or Phase 008 AWS deployment.
 
 ## Phase 003 request flow
 

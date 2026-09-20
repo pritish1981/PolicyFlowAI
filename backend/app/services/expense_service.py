@@ -15,6 +15,8 @@ from app.repositories.expense_repository import ExpenseRepository
 from app.schemas.expense import (Decision, ExpenseAssessmentResponse, ExpenseClarification,
                                  ExpenseCreate)
 from app.schemas.policy import PolicyCitation
+from app.repositories.review_repository import ReviewRepository
+from app.schemas.review import ExceptionOutcome, ExceptionStatus
 
 
 def _payload(expense) -> dict:
@@ -25,6 +27,7 @@ class ExpenseService:
     def __init__(self, dependencies: ExpenseDependencies, database_url: str):
         self.dependencies = dependencies
         self.repository = ExpenseRepository(dependencies.session_factory)
+        self.review_repository = ReviewRepository(dependencies.session_factory)
         self.database_url = database_url.replace("postgresql+psycopg://", "postgresql://", 1)
 
     @asynccontextmanager
@@ -55,13 +58,23 @@ class ExpenseService:
         missing = ExpenseCreate.model_validate(_payload(expense)).missing_fields()
         if expense.assessment is not None:
             record = expense.assessment
-            return ExpenseAssessmentResponse(
+            response = ExpenseAssessmentResponse(
                 expense_id=expense.id, thread_id=expense.thread_id, request_id=expense.request_id,
                 decision=Decision(record.decision), policy_limit=record.policy_limit,
                 confidence=record.confidence, explanation=record.explanation,
                 citations=[PolicyCitation.model_validate(item) for item in record.citations_json],
                 next_action=record.next_action,
             )
+            exception = self.review_repository.find_by_expense(expense.id)
+            if exception is not None:
+                next_action = ("WAIT_FOR_REVIEW" if exception.status == ExceptionStatus.PENDING_REVIEW
+                    else "PROVIDE_MORE_INFORMATION" if exception.status == ExceptionStatus.MORE_INFORMATION_REQUIRED
+                    else "COMPLETE")
+                response.exception = ExceptionOutcome(exception_id=exception.id, expense_id=expense.id,
+                    thread_id=expense.thread_id, status=exception.status,
+                    variance_amount=exception.variance_amount, next_action=next_action,
+                    reviewer_comments=exception.reviews[-1].comments if exception.reviews else None)
+            return response
         if missing:
             return ExpenseAssessmentResponse(
                 expense_id=expense.id, thread_id=expense.thread_id, request_id=expense.request_id,
@@ -125,3 +138,7 @@ class ExpenseService:
         except Exception:
             self.repository.mark_failed(expense.id)
             raise
+
+    def get(self, expense_id: UUID) -> ExpenseAssessmentResponse | None:
+        expense = self.repository.get(expense_id)
+        return None if expense is None else self._response(expense)
