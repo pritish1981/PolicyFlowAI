@@ -11,6 +11,7 @@ from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 
 from app.gateway.model_gateway import ModelContext, ModelGateway
+from app.gateway.models import EvidenceContext
 from app.gateway.prompts import EXCEPTION_SUMMARY_PROMPT_VERSION, build_exception_summary_messages
 from app.gateway.routing import ModelTask
 from app.graph.expense_graph import build_exception_graph
@@ -25,6 +26,9 @@ from app.schemas.review import (
     ReviewListItem,
     ReviewResumePayload,
 )
+from app.observability.context import TraceContext
+from app.observability.metrics import hitl_metadata
+from app.observability.tracing import emit_marker
 
 
 def validate_summary_citations(summary: ExceptionReviewSummary,
@@ -83,7 +87,13 @@ class ExceptionService:
                     "citations": [item.model_dump(mode="json") for item in citations]}),
                 output_schema=ExceptionReviewSummary,
                 context=ModelContext(request_id=expense.request_id, thread_id=expense.thread_id,
-                                     prompt_version=EXCEPTION_SUMMARY_PROMPT_VERSION))
+                                     prompt_version=EXCEPTION_SUMMARY_PROMPT_VERSION,
+                                     scenario="exception_review"),
+                evidence=[EvidenceContext(
+                    chunk_id=str(item.chunk_id), policy_code=item.policy_code,
+                    policy_version=item.policy_version, section_id=item.section_id,
+                    content=item.excerpt,
+                ) for item in citations])
             validate_summary_citations(result.output, citations)
             summary = result.output.model_dump(mode="json")
         except Exception:
@@ -102,6 +112,10 @@ class ExceptionService:
         await self._execute(lambda graph: graph.ainvoke(state,
             config={"configurable": {"thread_id": expense.thread_id}}))
         self.repository.append_event(record.id, "HUMAN_REVIEW_INTERRUPTED")
+        emit_marker("HUMAN_REVIEW_INTERRUPTED", TraceContext(
+            expense.request_id, expense.thread_id, "exception_review",
+            expense_id=str(expense.id), exception_id=str(record.id)),
+            **hitl_metadata(status=record.status))
         return self._outcome(self.repository.get(record.id)), created
 
     async def decide(self, exception_id: UUID, reviewer_id: str, action: ReviewAction) -> ExceptionOutcome:
@@ -113,6 +127,11 @@ class ExceptionService:
                 config={"configurable": {"thread_id": record.thread_id}}))
             self.repository.mark_resumed(exception_id)
             self.repository.append_event(exception_id, "WORKFLOW_RESUMED", reviewer_id)
+            emit_marker("WORKFLOW_RESUMED", TraceContext(
+                "unknown", record.thread_id, "exception_review",
+                expense_id=str(record.expense_id), exception_id=str(exception_id),
+                review_id=reviewer_id),
+                **hitl_metadata(status=record.status, action=action.decision))
             if record.status in (ExceptionStatus.APPROVED, ExceptionStatus.REJECTED):
                 self.repository.append_event(exception_id, "EXCEPTION_FINALIZED", reviewer_id)
         except Exception:
@@ -136,6 +155,11 @@ class ExceptionService:
             config={"configurable": {"thread_id": record.thread_id}}))
         self.repository.mark_resumed(exception_id)
         self.repository.append_event(exception_id, "WORKFLOW_RESUMED", review.reviewer_id)
+        emit_marker("WORKFLOW_RESUMED", TraceContext(
+            "unknown", record.thread_id, "exception_review",
+            expense_id=str(record.expense_id), exception_id=str(exception_id),
+            review_id=review.reviewer_id),
+            **hitl_metadata(status=record.status, action=review.decision))
         if record.status in (ExceptionStatus.APPROVED, ExceptionStatus.REJECTED):
             self.repository.append_event(exception_id, "EXCEPTION_FINALIZED", review.reviewer_id)
         return self._outcome(record, review.comments)
@@ -155,6 +179,10 @@ class ExceptionService:
         await self._execute(lambda graph: graph.ainvoke(state,
             config={"configurable": {"thread_id": record.thread_id}}))
         self.repository.append_event(record.id, "HUMAN_REVIEW_INTERRUPTED")
+        emit_marker("HUMAN_REVIEW_INTERRUPTED", TraceContext(
+            expense.request_id, record.thread_id, "exception_review",
+            expense_id=str(expense.id), exception_id=str(record.id)),
+            **hitl_metadata(status=record.status, action="MORE_INFORMATION_PROVIDED"))
         return self._outcome(record)
 
     def pending(self) -> list[ReviewListItem]:

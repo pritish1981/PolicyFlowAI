@@ -39,6 +39,7 @@ from app.schemas.policy import (
     EvidenceStatus, GroundedPolicyAnswer, PolicyAnswerResponse, PolicyQueryRequest,
 )
 from app.services.policy_service import PolicyService
+from app.observability.tracing import use_exporter
 
 
 def _hit(content: str = "The domestic hotel limit is INR 7,000 per night.") -> SearchHit:
@@ -108,7 +109,7 @@ def test_request_and_structured_schemas_are_strict():
 
 def test_configuration_defaults_are_safe():
     configured = Settings(_env_file=None, database_url="postgresql+psycopg://x:x@localhost/x",
-                          redis_url="redis://localhost:6379/0")
+                          redis_url="redis://localhost:6379/0", openai_api_key=None)
     assert configured.retrieval_top_n == 20
     assert configured.rrf_k == 60
     assert 3 <= configured.rerank_top_k <= 5
@@ -185,7 +186,10 @@ def test_citation_validator_accepts_authoritative_and_rejects_mismatch(monkeypat
                               {hit.chunk_id}, set()) == []
     mismatch = SearchHit(hit.chunk_id, "POL-999", hit.version, hit.section_id,
                          hit.section_title, hit.content)
-    assert validate_citations([mismatch], FakeSession(hit), date(2026, 9, 16)) == []
+    diagnostics = {}
+    assert validate_citations([mismatch], FakeSession(hit), date(2026, 9, 16),
+                              diagnostics=diagnostics) == []
+    assert diagnostics["identity_mismatch"] == 1
     assert validate_citations([hit], FakeSession(hit, False), date(2026, 9, 16)) == []
 
 
@@ -375,3 +379,32 @@ def test_golden_dataset_shape_and_unique_ids():
     assert len({item["id"] for item in data}) == len(data)
     assert {"POL-002", "POL-003", "POL-004", "POL-005", "POL-006"} <= {
         item.get("expected_policy_code") for item in data}
+
+
+def test_policy_workflow_emits_one_correlated_minimized_trace():
+    class Exporter:
+        def __init__(self):
+            self.started = []
+            self.finished = []
+        def start(self, run_id, stage, metadata, parent_run_id):
+            self.started.append((run_id, stage, metadata, parent_run_id))
+        def finish(self, run_id, record):
+            self.finished.append((run_id, record))
+
+    exporter = Exporter()
+    hit = _hit("SENSITIVE_POLICY_BODY")
+    with use_exporter(exporter):
+        response = asyncio.run(_service(hit).query(
+            PolicyQueryRequest(question="What is the hotel limit?"),
+            "trace-request", "trace-thread"))
+    assert response.evidence_status == EvidenceStatus.GROUNDED
+    stages = [item[1] for item in exporter.started]
+    assert stages[0] == "policy_qa.request"
+    assert {"policy_qa.hybrid_retrieval", "policy_qa.rrf_fusion",
+            "policy_qa.reranking", "policy_qa.governed_generation",
+            "policy_qa.citation_validation", "policy_qa.final_response"} <= set(stages)
+    assert stages.count("model_gateway.succeeded") == 0  # fake gateway bypasses Phase 006 hook
+    assert all(item[2].get("request_id") == "trace-request" for item in exporter.started)
+    assert all(item[2].get("thread_id") == "trace-thread" for item in exporter.started)
+    assert "SENSITIVE_POLICY_BODY" not in json.dumps(
+        [item[2] for item in exporter.started], default=str)

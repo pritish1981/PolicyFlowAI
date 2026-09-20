@@ -17,6 +17,8 @@ from app.schemas.expense import (Decision, ExpenseAssessmentResponse, ExpenseCla
 from app.schemas.policy import PolicyCitation
 from app.repositories.review_repository import ReviewRepository
 from app.schemas.review import ExceptionOutcome, ExceptionStatus
+from app.observability.context import TraceContext
+from app.observability.tracing import stage_span
 
 
 def _payload(expense) -> dict:
@@ -90,13 +92,16 @@ class ExpenseService:
         )
 
     async def _assess(self, expense) -> ExpenseAssessmentResponse:
-        state = await self._invoke_graph({
+        context = TraceContext(expense.request_id, expense.thread_id,
+                               "expense_assessment", expense_id=str(expense.id))
+        with stage_span("expense.request", context):
+            state = await self._invoke_graph({
                 "expense_id": str(expense.id), "thread_id": expense.thread_id,
                 "request_id": expense.request_id,
                 "expense": ExpenseCreate.model_validate(_payload(expense)).model_dump(mode="json"),
                 "assessment_date": self.dependencies.today().isoformat(),
                 "hits": [], "rules": None, "citations": [],
-            }, expense.thread_id)
+                }, expense.thread_id)
         if state["missing_fields"]:
             return self._response(expense)
         response = ExpenseAssessmentResponse(

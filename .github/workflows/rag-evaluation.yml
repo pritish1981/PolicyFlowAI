@@ -1,11 +1,73 @@
 name: RAG Evaluation
 
 on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "evaluation/**"
+      - "policies/**"
+      - ".github/workflows/rag-evaluation.yml"
+  push:
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      live_evaluation:
+        description: "Run optional external-judge baseline"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
-  placeholder:
+  deterministic:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: echo "Implement in OpenSpec change 007-observability-evaluation"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Dataset, metric, tracing, decision, and benchmark-smoke gates
+        env:
+          PYTHONPATH: backend:.
+          DATABASE_URL: postgresql+psycopg://unused:unused@localhost/unused
+          REDIS_URL: redis://localhost:6379/0
+          LANGSMITH_TRACING: "false"
+          ENABLE_AI_EVALUATION: "false"
+        run: >
+          uv run --no-project --python 3.12
+          --with-requirements backend/requirements.txt
+          pytest -q backend/tests/test_observability.py backend/tests/test_evaluation.py
+      - name: Generate deterministic and explicit-skip reports
+        env:
+          PYTHONPATH: backend:.
+          DATABASE_URL: postgresql+psycopg://unused:unused@localhost/unused
+          REDIS_URL: redis://localhost:6379/0
+          ENABLE_AI_EVALUATION: "false"
+        run: |
+          uv run --no-project --python 3.12 --with-requirements backend/requirements.txt python -m evaluation.run_decisions
+          uv run --no-project --python 3.12 --with-requirements backend/requirements.txt python -m evaluation.ragas.evaluate_rag
+          uv run --no-project --python 3.12 --with-requirements backend/requirements.txt python -m evaluation.deepeval.evaluate_agent
+          uv run --no-project --python 3.12 --with-requirements backend/requirements.txt python -m evaluation.summarize
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase-007-deterministic-reports
+          path: evaluation/reports/
+
+  live-evaluation:
+    if: github.event_name == 'workflow_dispatch' && inputs.live_evaluation
+    needs: deterministic
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Optional evaluator baseline
+        env:
+          PYTHONPATH: backend:.
+          DATABASE_URL: postgresql+psycopg://unused:unused@localhost/unused
+          REDIS_URL: redis://localhost:6379/0
+          ENABLE_AI_EVALUATION: "true"
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          uv run --no-project --python 3.12 --with-requirements backend/requirements.txt python -m evaluation.ragas.evaluate_rag
+          uv run --no-project --python 3.12 --with-requirements backend/requirements.txt python -m evaluation.deepeval.evaluate_agent

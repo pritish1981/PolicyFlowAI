@@ -20,8 +20,7 @@ from app.core.exceptions import (
     StructuredOutputError,
 )
 from app.db.session import SessionLocal
-from app.gateway.model_gateway import ModelGateway
-from app.gateway.providers.openai_provider import OpenAIProvider
+from app.gateway.factory import get_model_gateway
 from app.graph.expense_graph import ExpenseDependencies
 from app.schemas.expense import ExpenseAssessmentResponse, ExpenseClarification, ExpenseCreate
 from app.schemas.review import ExceptionCreate, ExceptionOutcome
@@ -34,14 +33,7 @@ logger = logging.getLogger(__name__)
 
 @lru_cache(maxsize=1)
 def get_expense_service() -> ExpenseService:
-    if settings.openai_api_key:
-        provider = OpenAIProvider(settings.openai_api_key, settings.model_timeout_seconds)
-    else:
-        class UnavailableProvider:
-            async def generate_structured(self, **_kwargs):
-                raise ModelUnavailableError("OPENAI_API_KEY is not configured")
-        provider = UnavailableProvider()
-    gateway = ModelGateway(provider)
+    gateway = get_model_gateway()
     return ExpenseService(ExpenseDependencies(SessionLocal, gateway), settings.database_url)
 
 

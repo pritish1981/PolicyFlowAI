@@ -10,8 +10,7 @@ from app.core.exceptions import (
     StructuredOutputError,
 )
 from app.db.session import SessionLocal
-from app.gateway.model_gateway import ModelGateway
-from app.gateway.providers.openai_provider import OpenAIProvider
+from app.gateway.factory import get_model_gateway
 from app.graph.graph import PolicyQADependencies
 from app.schemas.policy import PolicyAnswerResponse, PolicyQueryRequest
 from app.services.policy_service import PolicyService
@@ -23,8 +22,7 @@ router = APIRouter(prefix="/api/v1/policy", tags=["policy"])
 def get_policy_service() -> PolicyService | None:
     if not settings.openai_api_key:
         return None
-    gateway = ModelGateway(OpenAIProvider(settings.openai_api_key,
-                                          settings.model_timeout_seconds))
+    gateway = get_model_gateway()
     return PolicyService(PolicyQADependencies(session_factory=SessionLocal, gateway=gateway))
 
 

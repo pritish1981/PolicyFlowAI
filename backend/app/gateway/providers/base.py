@@ -1,21 +1,11 @@
 """Provider-neutral structured generation contracts."""
-from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Protocol
+from app.gateway.models import ProviderRequest, ProviderResponse
 
-from pydantic import BaseModel
-
-
-@dataclass(frozen=True)
-class ProviderResult:
-    output: BaseModel | dict[str, Any]
-    provider: str
-    model: str
-    input_tokens: int | None = None
-    output_tokens: int | None = None
+ProviderResult = ProviderResponse
 
 
 class ProviderAdapter(Protocol):
     async def generate_structured(
-        self, *, messages: list[dict[str, str]], output_schema: type[BaseModel],
-        model: str, max_output_tokens: int,
-    ) -> ProviderResult: ...
+        self, request: ProviderRequest,
+    ) -> ProviderResponse: ...

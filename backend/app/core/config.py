@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,10 +26,37 @@ class Settings(BaseSettings):
     citation_excerpt_chars: int = 600
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
+    openai_primary_model: str | None = None
+    openai_fallback_model: str | None = None
+    policy_qa_model: str | None = None
+    expense_rule_model: str | None = None
+    exception_summary_model: str | None = None
     model_timeout_seconds: float = 30.0
     model_max_retries: int = 2
+    model_retry_base_delay_ms: int = 250
+    model_validation_retries: int = 1
     max_output_tokens: int = 1000
+    policy_qa_max_input_tokens: int = 8000
+    policy_qa_max_output_tokens: int = 1000
+    expense_rule_max_input_tokens: int = 8000
+    expense_rule_max_output_tokens: int = 1200
+    exception_summary_max_input_tokens: int = 5000
+    exception_summary_max_output_tokens: int = 600
     thread_token_budget: int = 12000
+    thread_budget_ttl_seconds: int = 3600
+    model_context_max_chunks: int = 5
+    model_context_max_chars: int = 24000
+    langsmith_tracing: bool = False
+    langsmith_api_key: str | None = None
+    langsmith_project: str = "policyflow-ai-local"
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
+    enable_ai_evaluation: bool = False
+    evaluation_dataset_path: str = "evaluation/datasets"
+    evaluation_report_path: str = "evaluation/reports"
+    evaluation_precision_at_5_threshold: float = Field(default=0.80, ge=0, le=1)
+    evaluation_recall_at_10_threshold: float = Field(default=0.90, ge=0, le=1)
+    evaluation_citation_correctness_threshold: float = Field(default=0.95, ge=0, le=1)
+    evaluation_decision_accuracy_threshold: float = Field(default=1.0, ge=0, le=1)
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),

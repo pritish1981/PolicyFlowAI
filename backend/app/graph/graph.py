@@ -8,6 +8,7 @@ from langgraph.graph import END, START, StateGraph
 
 from app.core.config import settings
 from app.gateway.model_gateway import ModelContext, ModelGateway
+from app.gateway.models import EvidenceContext
 from app.gateway.prompts import build_policy_qa_messages
 from app.gateway.routing import ModelTask
 from app.graph.state import PolicyQAState
@@ -19,6 +20,8 @@ from app.rag.retrieval.hybrid_retriever import (
 from app.rag.retrieval.rrf import SearchHit, fuse
 from app.schemas.policy import EvidenceStatus, GroundedPolicyAnswer, SAFE_ABSTENTION
 from app.graph.expense_graph import ExpenseDependencies, build_expense_graph
+from app.observability.metrics import citation_metadata, ranking_metadata, retrieval_metadata
+from app.observability.tracing import annotate_span, traced_node
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +36,7 @@ class PolicyQADependencies:
 
 
 def _log(event: str, state: PolicyQAState, **fields) -> None:
+    annotate_span(**fields)
     logger.info(event, extra={"policyflow": {
         "event": event, "request_id": state.get("request_id"),
         "scenario": "policy_qa", **fields,
@@ -60,25 +64,23 @@ def build_policy_qa_graph(deps: PolicyQADependencies):
         results: HybridResults = deps.retriever(
             state["user_query"], deps.session_factory, filters=state["metadata_filters"],
         )
-        _log("policy_qa.retrieved", state, lexical_count=len(results.lexical_hits),
-             vector_count=len(results.vector_hits),
-             retrieved_chunk_ids=[str(h.chunk_id) for h in results.lexical_hits + results.vector_hits])
+        _log("policy_qa.retrieved", state, **retrieval_metadata(
+            filters=state["metadata_filters"].telemetry(),
+            lexical_hits=results.lexical_hits, vector_hits=results.vector_hits))
         return {"lexical_hits": results.lexical_hits, "vector_hits": results.vector_hits}
 
     def fuse_results(state: PolicyQAState) -> dict:
         fused = fuse([state.get("lexical_hits", []), state.get("vector_hits", [])],
                      settings.rrf_k, settings.retrieval_top_n)
-        _log("policy_qa.fused", state, fused_count=len(fused),
-             rrf_scores={str(h.chunk_id): h.rrf_score for h in fused})
+        _log("policy_qa.fused", state, **ranking_metadata(fused))
         return {"fused_hits": fused}
 
     def rerank_results(state: PolicyQAState) -> dict:
         fused = state.get("fused_hits", [])
         ranked = rerank(state["user_query"], fused, deps.reranker)
         fallback = bool(ranked and all(hit.rerank_score is None for hit in ranked))
-        _log("policy_qa.reranked", state, reranked_count=len(ranked),
-             rerank_fallback=fallback,
-             rerank_scores={str(h.chunk_id): h.rerank_score for h in ranked})
+        _log("policy_qa.reranked", state, **ranking_metadata(
+            ranked, reranked=True, fallback=fallback))
         return {"reranked_hits": ranked, "rerank_fallback": fallback}
 
     async def generate_grounded_answer(state: PolicyQAState) -> dict:
@@ -90,7 +92,12 @@ def build_policy_qa_graph(deps: PolicyQADependencies):
             task=ModelTask.POLICY_QA,
             messages=build_policy_qa_messages(state["user_query"], hits),
             output_schema=GroundedPolicyAnswer,
-            context=ModelContext(request_id=state["request_id"], thread_id=state.get("thread_id")),
+            context=ModelContext(request_id=state["request_id"], thread_id=state.get("thread_id"),
+                                 scenario="policy_qa"),
+            evidence=[EvidenceContext(
+                chunk_id=str(hit.chunk_id), policy_code=hit.policy_code,
+                policy_version=hit.version, section_id=hit.section_id, content=hit.content,
+            ) for hit in hits],
         )
         output = result.output
         usage = asdict(result.usage)
@@ -109,12 +116,15 @@ def build_policy_qa_graph(deps: PolicyQADependencies):
             return {"citations": []}
         hits = state.get("reranked_hits", [])
         cited_ids = set(state.get("citation_chunk_ids", []))
+        diagnostics: dict[str, int] = {}
         with deps.session_factory() as session:
             citations = validate_citations(
                 hits, session, state["assessment_date"],
                 retrieved_ids={hit.chunk_id for hit in hits}, cited_ids=cited_ids,
+                diagnostics=diagnostics,
             )
-        _log("policy_qa.citations_validated", state, citation_valid_count=len(citations))
+        _log("policy_qa.citations_validated", state, **citation_metadata(
+            list(cited_ids), citations, diagnostics))
         if settings.citation_required and not citations:
             return {"answer": SAFE_ABSTENTION, "citations": [],
                     "evidence_status": EvidenceStatus.INSUFFICIENT_INFORMATION.value}
@@ -133,15 +143,18 @@ def build_policy_qa_graph(deps: PolicyQADependencies):
         return {"answer": answer, "citations": citations, "evidence_status": status}
 
     graph = StateGraph(PolicyQAState)
-    graph.add_node("validate_request", validate_request)
-    graph.add_node("set_policy_qa", set_policy_qa)
-    graph.add_node("build_metadata_filters", build_metadata_filters)
-    graph.add_node("hybrid_retrieve", hybrid_retrieve)
-    graph.add_node("fuse_results", fuse_results)
-    graph.add_node("rerank_results", rerank_results)
-    graph.add_node("generate_grounded_answer", generate_grounded_answer)
-    graph.add_node("validate_citations", validate_model_citations)
-    graph.add_node("final_response", final_response)
+    graph.add_node("validate_request", traced_node("policy_qa.validate_request", validate_request))
+    graph.add_node("set_policy_qa", traced_node("policy_qa.set_scenario", set_policy_qa))
+    graph.add_node("build_metadata_filters", traced_node(
+        "policy_qa.build_filters", build_metadata_filters))
+    graph.add_node("hybrid_retrieve", traced_node("policy_qa.hybrid_retrieval", hybrid_retrieve))
+    graph.add_node("fuse_results", traced_node("policy_qa.rrf_fusion", fuse_results))
+    graph.add_node("rerank_results", traced_node("policy_qa.reranking", rerank_results))
+    graph.add_node("generate_grounded_answer", traced_node(
+        "policy_qa.governed_generation", generate_grounded_answer))
+    graph.add_node("validate_citations", traced_node(
+        "policy_qa.citation_validation", validate_model_citations))
+    graph.add_node("final_response", traced_node("policy_qa.final_response", final_response))
     graph.add_edge(START, "validate_request")
     graph.add_edge("validate_request", "set_policy_qa")
     graph.add_edge("set_policy_qa", "build_metadata_filters")

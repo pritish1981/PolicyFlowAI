@@ -8,8 +8,7 @@ from app.api.dependencies import demo_employee, demo_reviewer
 from app.core.config import settings
 from app.core.exceptions import ModelUnavailableError, ReviewConflictError
 from app.db.session import SessionLocal
-from app.gateway.model_gateway import ModelGateway
-from app.gateway.providers.openai_provider import OpenAIProvider
+from app.gateway.factory import get_model_gateway
 from app.schemas.review import (
     ExceptionInformation,
     ExceptionOutcome,
@@ -24,14 +23,7 @@ router = APIRouter(prefix="/api/v1", tags=["exception-review"])
 
 @lru_cache(maxsize=1)
 def get_exception_service() -> ExceptionService:
-    if settings.openai_api_key:
-        provider = OpenAIProvider(settings.openai_api_key, settings.model_timeout_seconds)
-    else:
-        class UnavailableProvider:
-            async def generate_structured(self, **_kwargs):
-                raise ModelUnavailableError("OPENAI_API_KEY is not configured")
-        provider = UnavailableProvider()
-    return ExceptionService(SessionLocal, ModelGateway(provider), settings.database_url)
+    return ExceptionService(SessionLocal, get_model_gateway(), settings.database_url)
 
 
 @router.get("/reviews/pending", response_model=list[ReviewListItem])
