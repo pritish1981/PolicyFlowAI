@@ -2,10 +2,130 @@ name: Deploy AWS
 
 on:
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Existing commit SHA to build and deploy (defaults to selected ref SHA)"
+        required: false
+        type: string
+      confirm_deploy:
+        description: "Type DEPLOY to authorize the AWS deployment"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: policyflow-aws-poc
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+  ECS_BACKEND_SERVICE: ${{ vars.ECS_BACKEND_SERVICE }}
+  ECS_FRONTEND_SERVICE: ${{ vars.ECS_FRONTEND_SERVICE }}
+  ECS_BACKEND_TASK_FAMILY: ${{ vars.ECS_BACKEND_TASK_FAMILY }}
+  ECS_FRONTEND_TASK_FAMILY: ${{ vars.ECS_FRONTEND_TASK_FAMILY }}
+  ECS_MIGRATION_TASK_FAMILY: ${{ vars.ECS_MIGRATION_TASK_FAMILY }}
+  APPLICATION_URL: ${{ vars.APPLICATION_URL }}
 
 jobs:
-  placeholder:
+  build-and-deploy:
+    if: inputs.confirm_deploy == 'DEPLOY'
     runs-on: ubuntu-latest
+    environment: aws-poc
     steps:
       - uses: actions/checkout@v4
-      - run: echo "Implement in OpenSpec change 008-aws-deployment-hardening"
+        with:
+          ref: ${{ env.IMAGE_TAG }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push immutable images
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          BACKEND_REPOSITORY: ${{ vars.ECR_BACKEND_REPOSITORY }}
+          FRONTEND_REPOSITORY: ${{ vars.ECR_FRONTEND_REPOSITORY }}
+        run: |
+          docker build -f backend/Dockerfile -t "$REGISTRY/$BACKEND_REPOSITORY:$IMAGE_TAG" .
+          docker build -t "$REGISTRY/$FRONTEND_REPOSITORY:$IMAGE_TAG" frontend
+          docker push "$REGISTRY/$BACKEND_REPOSITORY:$IMAGE_TAG"
+          docker push "$REGISTRY/$FRONTEND_REPOSITORY:$IMAGE_TAG"
+
+      - id: previous
+        name: Capture current task definitions
+        run: |
+          {
+            echo "backend=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_BACKEND_SERVICE" --query 'services[0].taskDefinition' --output text)"
+            echo "frontend=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_FRONTEND_SERVICE" --query 'services[0].taskDefinition' --output text)"
+          } >> "$GITHUB_OUTPUT"
+
+      - id: register
+        name: Register SHA task definitions
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          BACKEND_REPOSITORY: ${{ vars.ECR_BACKEND_REPOSITORY }}
+          FRONTEND_REPOSITORY: ${{ vars.ECR_FRONTEND_REPOSITORY }}
+        run: |
+          render_task() {
+            local family="$1"
+            local container="$2"
+            local image="$3"
+            local output="$4"
+            aws ecs describe-task-definition --task-definition "$family" --query taskDefinition |
+              jq --arg container "$container" --arg image "$image" '
+                .containerDefinitions |= map(if .name == $container then .image = $image else . end) |
+                del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' > "$output"
+          }
+          render_task "$ECS_BACKEND_TASK_FAMILY" backend "$REGISTRY/$BACKEND_REPOSITORY:$IMAGE_TAG" backend-task.json
+          render_task "$ECS_FRONTEND_TASK_FAMILY" frontend "$REGISTRY/$FRONTEND_REPOSITORY:$IMAGE_TAG" frontend-task.json
+          render_task "$ECS_MIGRATION_TASK_FAMILY" migration "$REGISTRY/$BACKEND_REPOSITORY:$IMAGE_TAG" migration-task.json
+          {
+            echo "backend=$(aws ecs register-task-definition --cli-input-json file://backend-task.json --query 'taskDefinition.taskDefinitionArn' --output text)"
+            echo "frontend=$(aws ecs register-task-definition --cli-input-json file://frontend-task.json --query 'taskDefinition.taskDefinitionArn' --output text)"
+            echo "migration=$(aws ecs register-task-definition --cli-input-json file://migration-task.json --query 'taskDefinition.taskDefinitionArn' --output text)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run one-off Alembic migration
+        env:
+          SUBNETS: ${{ vars.ECS_SUBNET_IDS }}
+          SECURITY_GROUP: ${{ vars.ECS_SECURITY_GROUP_ID }}
+          MIGRATION_TASK: ${{ steps.register.outputs.migration }}
+        run: |
+          NETWORK="awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUP],assignPublicIp=DISABLED}"
+          TASK_ARN=$(aws ecs run-task --cluster "$ECS_CLUSTER" --launch-type FARGATE --task-definition "$MIGRATION_TASK" --network-configuration "$NETWORK" --query 'tasks[0].taskArn' --output text)
+          test "$TASK_ARN" != "None"
+          aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN"
+          EXIT_CODE=$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN" --query 'tasks[0].containers[0].exitCode' --output text)
+          test "$EXIT_CODE" = "0"
+
+      - id: rollout
+        name: Deploy services and wait for stability
+        env:
+          NEW_BACKEND_TASK: ${{ steps.register.outputs.backend }}
+          NEW_FRONTEND_TASK: ${{ steps.register.outputs.frontend }}
+        run: |
+          aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_BACKEND_SERVICE" --task-definition "$NEW_BACKEND_TASK" --force-new-deployment
+          aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_FRONTEND_SERVICE" --task-definition "$NEW_FRONTEND_TASK" --force-new-deployment
+          aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_BACKEND_SERVICE" "$ECS_FRONTEND_SERVICE"
+
+      - name: Public deployment smoke test
+        run: python scripts/deployment_smoke.py --base-url "$APPLICATION_URL" --timeout 15
+
+      - name: Restore previous task definitions after rollout failure
+        if: failure() && steps.previous.outputs.backend != ''
+        env:
+          PREVIOUS_BACKEND_TASK: ${{ steps.previous.outputs.backend }}
+          PREVIOUS_FRONTEND_TASK: ${{ steps.previous.outputs.frontend }}
+        run: |
+          aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_BACKEND_SERVICE" --task-definition "$PREVIOUS_BACKEND_TASK"
+          aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_FRONTEND_SERVICE" --task-definition "$PREVIOUS_FRONTEND_TASK"
+          aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_BACKEND_SERVICE" "$ECS_FRONTEND_SERVICE"

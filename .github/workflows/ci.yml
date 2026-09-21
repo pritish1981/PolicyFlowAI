@@ -7,16 +7,42 @@ on:
 jobs:
   backend-test:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql+psycopg://test:test@localhost:5432/test
+      REDIS_URL: redis://localhost:6379/0
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install -r backend/requirements.txt
-      - run: pytest -q
-        env:
-          DATABASE_URL: postgresql+psycopg://test:test@localhost:5432/test
-          REDIS_URL: redis://localhost:6379/0
+      - name: Apply database migrations
+        working-directory: backend
+        run: python -m alembic upgrade head
+      - run: pytest -q tests backend/tests
   frontend-build:
     runs-on: ubuntu-latest
     defaults:
@@ -29,3 +55,36 @@ jobs:
           node-version: "20"
       - run: npm ci
       - run: npm run build
+
+  openspec:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Strict OpenSpec validation
+        run: npx -y @fission-ai/openspec@1.10.0 validate --all --strict
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - name: Terraform format
+        run: terraform -chdir=infrastructure/terraform fmt -check
+      - name: Terraform initialize without remote backend
+        run: terraform -chdir=infrastructure/terraform init -backend=false
+      - name: Terraform validate
+        run: terraform -chdir=infrastructure/terraform validate
+
+  container-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend production image
+        run: docker build -f backend/Dockerfile -t policyflow-backend:ci .
+      - name: Build frontend production image
+        run: docker build -t policyflow-frontend:ci frontend

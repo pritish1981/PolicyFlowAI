@@ -732,3 +732,119 @@ DeepEval never run in FastAPI startup or request execution.
 Phase 007 defers AWS/CloudWatch, Prometheus/Grafana, production dashboards and
 alerts, durable cost accounting, new retrieval algorithms, and all Phase 008
 deployment hardening.
+
+## Phase 008 — AWS deployment hardening
+
+Phase 008 prepares production containers, Terraform, GitHub OIDC deployment,
+Cloudflare guidance, migrations, smoke tests, rollback, and operations. These
+steps validate repository artifacts locally; they do not claim a real AWS
+deployment.
+
+### 1. Validate runtime configuration and smoke tooling
+
+From the repository root:
+
+    $env:PYTHONPATH = "backend;."
+    uv run --no-project --python 3.12 --with-requirements backend/requirements.txt pytest -q backend/tests/test_deployment_config.py tests/unit/test_deployment_smoke.py
+
+Expect configuration parsing, Trusted Host behavior, ALB liveness bypass,
+non-root Dockerfile assertions, and smoke success/failure behavior to pass
+without AWS, Cloudflare, OpenAI, Cohere, or LangSmith credentials.
+
+### 2. Validate Compose
+
+Ensure the local environment contains a private POSTGRES_PASSWORD, then run:
+
+    docker compose config --quiet
+    docker compose up -d postgres redis
+    docker compose ps
+    docker compose exec -T postgres pg_isready -U policyflow -d policyflow
+    docker compose exec -T redis redis-cli ping
+
+Compose intentionally runs one Alembic upgrade before its single local backend
+process. The production ECS backend does not run migrations at startup.
+
+### 3. Build and inspect production images
+
+    docker build -f backend/Dockerfile -t policyflow-backend:phase008 .
+    docker build -t policyflow-frontend:phase008 frontend
+    docker image inspect policyflow-backend:phase008 --format '{{json .Config.User}} {{json .Config.Healthcheck.Test}}'
+    docker image inspect policyflow-frontend:phase008 --format '{{json .Config.User}} {{json .Config.Healthcheck.Test}}'
+    docker run --rm policyflow-backend:phase008 sh -c 'id && test ! -e /app/backend/.env'
+    docker run --rm policyflow-frontend:phase008 sh -c 'id && test ! -e /usr/share/nginx/html/.env'
+
+Expect backend user policyflow, an unprivileged nginx frontend, and configured
+health checks. Neither image may contain an environment file.
+
+To exercise the frontend image:
+
+    docker run --rm -d --name policyflow-frontend-check -p 18080:8080 policyflow-frontend:phase008
+    Invoke-WebRequest http://localhost:18080/healthz
+    docker stop policyflow-frontend-check
+
+Expect HTTP 200 and body ok.
+
+### 4. Validate Terraform without creating resources
+
+Install Terraform 1.8-1.x, then:
+
+    terraform -chdir=infrastructure/terraform fmt -check
+    terraform -chdir=infrastructure/terraform init -backend=false
+    terraform -chdir=infrastructure/terraform validate
+
+Review static invariants:
+
+    rg -n 'publicly_accessible\s*=\s*false|assign_public_ip\s*=\s*false|transit_encryption_enabled\s*=\s*true|block_public_policy\s*=\s*true' infrastructure/terraform
+    rg -n '0\.0\.0\.0/0' infrastructure/terraform
+
+Internet-wide CIDRs are allowed only for public ALB HTTP/HTTPS ingress and ECS
+DNS/HTTPS egress. They must never appear on RDS or Redis ingress.
+
+A real plan requires AWS credentials plus domain, ACM, and state inputs:
+
+    Copy-Item infrastructure/terraform/terraform.tfvars.example infrastructure/terraform/poc.auto.tfvars
+    # Replace placeholders. This ignored file must never be committed.
+    terraform -chdir=infrastructure/terraform plan -out=policyflow.tfplan
+
+Do not run terraform apply during local validation.
+
+### 5. Validate GitHub workflows
+
+    uv run --no-project --python 3.12 --with PyYAML python -c "import pathlib,yaml; [yaml.safe_load(p.read_text()) for p in pathlib.Path('.github/workflows').glob('*.yml')]; print('workflow YAML parsed')"
+    rg -n 'aws-access-key-id|aws-secret-access-key|:latest' .github/workflows
+
+The YAML parse must pass. The secret/static-key scan must return no deployment
+credential and no mutable-only image deployment. The AWS workflow is manual,
+requires the DEPLOY confirmation string, uses OIDC, runs migration first, waits
+for both services, performs smoke validation, and restores prior revisions on
+failure.
+
+### 6. Run all regressions
+
+    $env:PYTHONPATH = "backend;."
+    uv run --no-project --python 3.12 --with-requirements backend/requirements.txt pytest -q tests backend/tests
+    Push-Location frontend
+    npm.cmd test -- --run
+    npm.cmd run build
+    Pop-Location
+
+All Phase 001-007 tests must remain green.
+
+### 7. OpenSpec and publication safety
+
+    npx.cmd -y @fission-ai/openspec@1.10.0 validate 008-aws-deployment-hardening --strict
+    npx.cmd -y @fission-ai/openspec@1.10.0 validate --specs --strict
+    npx.cmd -y @fission-ai/openspec@1.10.0 validate --all --strict
+    git diff --check
+    git status --short
+
+Also confirm no .env, tfstate, tfplan, private key, secret version, generated
+evaluation report, or cloud credential is staged.
+
+### 8. Real deployment validation boundary
+
+Only after explicit approval, follow docs/aws-deployment.md to bootstrap remote
+state and OIDC, review a Terraform plan, apply resources, populate secrets, run
+the migration-first deployment, configure Cloudflare, and execute smoke/demo
+scenarios. Until then, RDS pgvector, ECS/ALB health, CloudWatch logs, rollback,
+Cloudflare TLS, and real cost remain pending external validation.

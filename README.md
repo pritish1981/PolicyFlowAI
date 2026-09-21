@@ -1,237 +1,231 @@
 # PolicyFlow AI
 
-PolicyFlow AI is a production-oriented proof of concept for enterprise expense
-compliance, policy question answering, and controlled human exception review.
-It combines FastAPI, React, LangGraph, PostgreSQL/pgvector, deterministic
-business rules, a governed Model Gateway, privacy-safe tracing, and offline
-quality evaluation.
+PolicyFlow AI is a production-oriented portfolio proof of concept for enterprise
+expense-policy question answering, deterministic compliance assessment, and
+controlled human exception review.
 
-The repository uses synthetic policy and expense data. It is not a production
-financial authorization system.
+It combines FastAPI, React, LangGraph, PostgreSQL with pgvector, hybrid
+retrieval, a governed Model Gateway, human-in-the-loop workflows, privacy-safe
+tracing, offline evaluation, and an AWS ECS/Fargate deployment definition.
 
-## Current status
+Only synthetic policy and expense data belongs in this project. PolicyFlow AI
+is not a production financial authorization system.
 
-Phases 001 through 007 are implemented, validated, synchronized into canonical
-OpenSpec specifications, and archived. There are currently no active OpenSpec
-changes. Phase 008 has not started.
+## Project status
+
+Phases 001-007 are implemented, validated, synchronized into canonical
+OpenSpec specifications, and archived. Phase 008 is implemented and locally
+validated with all 41 tasks complete; it remains active until review and
+archive.
+
+No AWS resources, Cloudflare records, production secrets, or real deployment
+were created by Phase 008.
 
 | Phase | Capability | Status |
 |---|---|---|
 | 001 | Platform foundation | Complete and archived |
 | 002 | Policy ingestion and hybrid RAG | Complete and archived |
-| 003 | Policy Q&A | Complete and archived |
+| 003 | Grounded Policy Q&A | Complete and archived |
 | 004 | Expense compliance assessment | Complete and archived |
 | 005 | Human exception review | Complete and archived |
 | 006 | Model Gateway and guardrails | Complete and archived |
 | 007 | Observability and evaluation | Complete and archived, 56/56 tasks |
+| 008 | AWS deployment hardening | Implemented and locally validated, 41/41 tasks; archive and cloud deployment pending |
 
-Canonical specifications are under [openspec/specs](openspec/specs/). Archived
-change artifacts are under [openspec/changes/archive](openspec/changes/archive/).
+Current validation evidence:
 
-## Completed phases
+- Python: 135 tests passed
+- Frontend: 2 tests passed and Vite production build passed
+- Docker: backend and frontend production images built successfully
+- Docker Compose: PostgreSQL, Redis, backend, and frontend healthy
+- Local database: pgvector 0.8.6 and Alembic head 20260920_0004
+- Terraform: format and provider-backed validation passed with Terraform 1.9.8
+- GitHub Actions: workflow YAML and actionlint passed
+- OpenSpec: 7 canonical specs passed; repository-wide 8 items passed
+- Frontend production dependency audit: 0 vulnerabilities
 
-### Phase 001 — Platform foundation
+## Capabilities delivered
 
-- FastAPI backend and React/TypeScript/Vite frontend
-- PostgreSQL 16 with pgvector and Redis
-- SQLAlchemy, Alembic, Docker Compose, health/readiness endpoints, and CI
-- Deterministic application boundaries and synthetic-data foundation
+### Platform and policy intelligence
 
-[Archived change](openspec/changes/archive/2026-09-13-001-platform-foundation/)
-
-### Phase 002 — Policy ingestion and hybrid RAG
-
+- FastAPI backend and React/TypeScript frontend
+- PostgreSQL 16, pgvector, Redis, SQLAlchemy, Alembic, and Docker Compose
 - Six synthetic policies, POL-001 through POL-006
-- Section-aware parsing and content-hash idempotent ingestion
-- PostgreSQL full-text search and pgvector retrieval
-- ACTIVE/effective-date, category, region, and travel filters
-- Reciprocal Rank Fusion and Cohere/BGE reranker adapters
-- Authoritative policy/chunk persistence and citation lookup
+- Section-aware, content-hash-idempotent policy ingestion
+- PostgreSQL full-text search and pgvector semantic retrieval
+- Reciprocal Rank Fusion with optional Cohere or local BGE reranking
+- Database-backed citation validation and safe abstention
 
-[Archived change](openspec/changes/archive/2026-09-13-002-policy-ingestion-and-hybrid-rag/)
+### Expense compliance and human review
 
-### Phase 003 — Policy Q&A
-
-- Strict question and grounded-answer contracts
-- LangGraph Policy Q&A workflow
-- Hybrid retrieval, RRF, optional reranking, and safe abstention
-- Structured model output through the governed gateway
-- Database-backed citation and source validation
-- React question-and-citation experience
-
-[Canonical spec](openspec/specs/policy-qa/spec.md) ·
-[Archived change](openspec/changes/archive/2026-09-17-003-policy-qa/)
-
-### Phase 004 — Expense compliance assessment
-
-- Structured expense intake, clarification, and idempotency
-- Separate expense and assessment persistence
-- Evidence-grounded rule extraction
-- Exact Decimal amount and receipt evaluation
+- Strict Pydantic request, state, and response contracts
+- Exact Decimal amount and receipt rules
 - COMPLIANT, NON_COMPLIANT, NEEDS_REVIEW, and
   INSUFFICIENT_INFORMATION outcomes
-- React expense assessment experience
-
-[Canonical spec](openspec/specs/expense-compliance/spec.md) ·
-[Archived change](openspec/changes/archive/2026-09-18-004-expense-compliance-assessment/)
-
-### Phase 005 — Human exception review
-
-- Durable exception workflow with PostgreSQL LangGraph checkpoints
-- Human-only APPROVE, REJECT, and REQUEST_MORE_INFORMATION actions
-- Auditable interrupt, resume, rework, and finalization lifecycle
-- Deterministic variance calculation
-- Non-authoritative AI review summaries
+- Durable LangGraph checkpointing in PostgreSQL
+- Auditable exception interrupt, resume, rework, and finalization
+- Human-only APPROVE, REJECT, and REQUEST_MORE_INFORMATION authority
 - Reviewer queue and detail UI
 
-The persisted human action is authoritative. AI summaries and checkpoints are
-not business truth, and the original expense assessment remains auditable.
+### Model governance and quality
 
-[Canonical spec](openspec/specs/exception-review/spec.md) ·
-[Archived change](openspec/changes/archive/2026-09-20-005-exception-hitl/)
-
-### Phase 006 — Model Gateway and guardrails
-
-- One provider-neutral gateway for Policy Q&A, expense-rule extraction, and
-  exception-summary generation
-- Task routing, versioned prompts, typed evidence, and structured output
-- Input/output limits and request/thread token budgets
-- Bounded technical retries, one schema-repair attempt, and optional technical
-  fallback
-- Input, evidence, citation, and authority guardrails
-- Sanitized provider-neutral model telemetry
-
-The gateway does not replace PostgreSQL evidence checks, deterministic expense
-rules, citation authority, or human review authorization.
-
-[Canonical spec](openspec/specs/model-governance/spec.md) ·
-[Archived change](openspec/changes/archive/2026-09-20-006-model-gateway-guardrails/)
-
-### Phase 007 — Observability and evaluation
-
-- Optional fail-open LangSmith tracing behind a project-owned adapter
-- Immutable request, thread, expense, exception, and review correlation
-- High-value spans for API/service boundaries, LangGraph nodes, retrieval, RRF,
-  reranking, Model Gateway, citation checks, deterministic decisions, and HITL
-- Central metadata allow-listing, normalization, bounding, and redaction
+- Provider-neutral Model Gateway with task routing and versioned prompts
+- Typed evidence, structured output, bounded retries, repair, and fallback
+- Input, evidence, citation, authority, and token-budget guardrails
+- Optional fail-open LangSmith tracing with minimized metadata
 - Versioned Policy Q&A and expense golden datasets
-- Deterministic Precision@5, Recall@10, MRR, citation correctness,
-  valid-citation coverage, and exact decision accuracy
-- Vector-only, hybrid, and hybrid-plus-reranker benchmarking
-- Optional offline Ragas and DeepEval baselines
-- JSON/Markdown reports and credential-free default CI gates
+- Deterministic retrieval, citation, and decision metrics
+- Offline Ragas and DeepEval adapters with explicit credential-based skips
 
-Tracing observes workflows but never determines a policy answer, expense
-decision, or reviewer action. Exporter failure cannot change application
-results, persistence, checkpoints, or human authority.
+### AWS deployment hardening
 
-[Canonical spec](openspec/specs/observability-evaluation/spec.md) ·
-[Archived change](openspec/changes/archive/2026-09-20-007-observability-evaluation/) ·
-[Implementation report](docs/phase-007-implementation-report.md)
+- Non-root FastAPI image and unprivileged nginx frontend image
+- Terraform for a two-AZ VPC, public ALB, and private Fargate services
+- Private encrypted RDS PostgreSQL and ElastiCache Redis
+- Immutable ECR repositories and SHA-tagged deployments
+- Encrypted, versioned, public-access-blocked S3 storage
+- Secrets Manager references and separate least-privilege ECS roles
+- Separate backend, frontend, and migration CloudWatch log groups
+- GitHub OIDC deployment with one-off migration, stability waits, smoke tests,
+  and prior-task-definition rollback
+- Cloudflare proxied DNS and Full (strict) TLS operating guidance
 
-## End-to-end architecture
+See the [Phase 008 implementation report](docs/phase-008-implementation-report.md)
+for the full inventory and validation evidence.
 
-    React
+## Architecture
+
+    User
       |
       v
-    FastAPI and strict Pydantic contracts
+    Cloudflare - DNS, TLS, edge controls
       |
       v
-    Application services
+    AWS Application Load Balancer
       |
-      v
-    LangGraph workflows
+      +--> React/nginx frontend - ECS/Fargate
       |
-      +--> PostgreSQL FTS and pgvector retrieval
-      +--> RRF and optional reranking
-      +--> governed Model Gateway
-      +--> authoritative citation validation
-      +--> deterministic Decimal expense rules
-      +--> durable human-review interrupt/resume
-      |
-      v
-    PostgreSQL business records and checkpoints
+      +--> FastAPI backend - ECS/Fargate
+              |
+              +--> RDS PostgreSQL
+              |      +--> app business records
+              |      +--> rag documents, FTS, and pgvector
+              |      +--> audit records
+              |      +--> LangGraph checkpoints
+              |
+              +--> ElastiCache Redis - transient coordination only
+              +--> S3 - synthetic policy sources and optional artifacts
+              +--> OpenAI/Cohere over outbound HTTPS
+              +--> LangSmith over outbound HTTPS
 
-    Runtime observation: local structured logs and optional LangSmith traces
-    Offline quality: golden datasets, Pytest, Ragas, DeepEval, and reports
+    GitHub Actions -> Amazon ECR -> migration task -> ECS services
+    ECS logs -> CloudWatch
+    AI trace metadata -> optional LangSmith
 
-## Authority boundaries
+For local development, Docker Compose provides PostgreSQL, Redis, backend, and
+frontend equivalents.
 
-- Policy documents and chunks stored in PostgreSQL are the evidence source.
-- Only ACTIVE and effective evidence may support grounded output.
-- Models may extract or summarize; they do not authorize financial outcomes.
-- Deterministic code selects expense decisions from verified rules.
-- A material policy answer without valid citations becomes a safe abstention.
-- Only an authorized human reviewer can approve or reject an exception.
-- Observability metadata is diagnostic and never business truth.
-- Ragas and DeepEval run offline, never during API startup or request handling.
+## Authority and safety boundaries
+
+- PostgreSQL policy documents and chunks are the authoritative evidence source.
+- Only ACTIVE and effective evidence may support a grounded answer.
+- Models may extract and summarize; they do not authorize financial outcomes.
+- Deterministic code selects compliance outcomes from validated evidence.
+- Material answers without valid citations become safe abstentions.
+- Only an authorized human reviewer may approve or reject an exception.
+- LangGraph checkpoints are execution state, not business truth.
+- Redis is transient and never stores authoritative business or checkpoint data.
+- Observability and evaluation never determine application outcomes.
+- No environment file, API key, database password, Terraform state, or private
+  policy document may be committed.
 
 ## Technology stack
 
 - Backend: Python 3.12, FastAPI, Pydantic, SQLAlchemy, Alembic
 - Workflow: LangGraph with PostgreSQL checkpoints
 - Data: PostgreSQL 16, pgvector, Redis
-- Retrieval: PostgreSQL FTS, pgvector, RRF, optional Cohere/BGE reranking
-- Models: provider-neutral Model Gateway with an OpenAI adapter
-- Frontend: React 18, TypeScript, Vite, Vitest
-- Observability: structured logs and optional LangSmith
+- Retrieval: PostgreSQL FTS, pgvector, RRF, Cohere/BGE adapters
+- Models: governed provider-neutral gateway with an OpenAI adapter
+- Frontend: React 18, TypeScript, Vite, Vitest, nginx
+- Observability: structured logs, CloudWatch, optional LangSmith
 - Evaluation: Pytest, deterministic metrics, Ragas, DeepEval
-- Delivery: Docker Compose and GitHub Actions
+- Delivery: Docker Compose, Terraform, GitHub Actions OIDC, ECR, ECS/Fargate
+- Edge: Cloudflare and an ACM-backed AWS ALB
 
 ## Repository layout
 
-    backend/                 FastAPI application, workflows, rules, and tests
-    frontend/                React application and UI tests
-    policies/synthetic/      Synthetic policy source documents
-    scripts/                 Ingestion and smoke utilities
-    evaluation/              Golden datasets, metrics, runners, and reports
-    openspec/specs/          Canonical capability specifications
-    openspec/changes/archive Archived planning/design/task artifacts
-    docs/local-validation.md Detailed Phase 001–007 local runbook
+    backend/                    FastAPI application, workflows, rules, migrations, tests
+    frontend/                   React UI, tests, and production nginx configuration
+    policies/synthetic/         Synthetic policy source documents
+    scripts/                    Ingestion, evaluation, seeding, and deployment smoke tools
+    evaluation/                 Golden datasets, metrics, runners, and ignored reports
+    infrastructure/terraform/   AWS Terraform root
+    infrastructure/aws/         AWS component operating notes
+    infrastructure/cloudflare/  Edge DNS and TLS guidance
+    openspec/specs/             Canonical capability specifications
+    openspec/changes/           Active and archived OpenSpec changes
+    docs/local-validation.md    Detailed Phase 001-008 local validation
+    docs/aws-deployment.md      AWS bootstrap, deployment, rollback, cost, and cleanup
 
-## Prerequisites
+## Local prerequisites
 
-- Docker Desktop with the Docker engine running
+- Docker Desktop with the Linux container engine running
 - Python 3.12
 - uv
 - Node.js 20 and npm
-- PowerShell for the commands below
+- PowerShell
+- Terraform 1.8-1.x only for direct local IaC commands
 
-Model and observability credentials are optional for automated validation.
-Never commit .env, API keys, database passwords, or production data.
+Provider and tracing credentials are optional for automated validation. Real
+model-backed Q&A requires an OpenAI key; Cohere reranking requires a Cohere key.
 
-## Environment setup
+## Local environment
+
+The repository intentionally does not publish an environment template. Create a
+private .env file locally with at least:
+
+    POSTGRES_DB=policyflow
+    POSTGRES_USER=policyflow
+    POSTGRES_PASSWORD=<private-local-password>
+    POSTGRES_PORT=5433
+    CORS_ORIGINS=http://localhost:5173
+    VITE_API_BASE_URL=http://localhost:8000
+
+Optional private settings include OPENAI_API_KEY, COHERE_API_KEY,
+POLICY_ADMIN_TOKEN, LANGSMITH_API_KEY, and provider/model selections.
+
+Host processes connect to PostgreSQL on localhost:5433. Containers connect to
+postgres:5432. Redis is available locally on port 6379.
+
+## Quick start with Docker Compose
 
 From the repository root:
 
-    if (-not (Test-Path .env)) { Copy-Item .env.example .env }
-
-Review these local settings:
-
-- Host processes use PostgreSQL at localhost:5433.
-- Containers use postgres:5432.
-- Redis is exposed at localhost:6379.
-- OPENAI_API_KEY is needed only for real model-backed API calls.
-- COHERE_API_KEY is needed only for the Cohere reranker.
-- RERANK_PROVIDER may be cohere, bge, or rrf.
-- LANGSMITH_TRACING defaults to false.
-- ENABLE_AI_EVALUATION defaults to false.
-
-The local environment template is intentionally ignored by Git under the
-repository's environment-file publication rule.
-
-## Quick start
-
-### 1. Start infrastructure
-
-    docker compose up -d postgres redis
+    docker compose config --quiet
+    docker compose up -d --build
     docker compose ps
+
+Compose applies Alembic migrations before starting its single local backend.
+Wait until all four services report healthy, then open:
+
+- Frontend: http://localhost:5173
+- Swagger UI: http://localhost:8000/docs
+- OpenAPI JSON: http://localhost:8000/openapi.json
+- Liveness: http://localhost:8000/health
+- Readiness: http://localhost:8000/ready
+
+Validate dependencies:
+
     docker compose exec -T postgres pg_isready -U policyflow -d policyflow
     docker compose exec -T redis redis-cli ping
+    Invoke-RestMethod http://localhost:8000/health
+    Invoke-RestMethod http://localhost:8000/ready
 
-PostgreSQL and Redis should report healthy/ready.
+Expected readiness reports PostgreSQL and Redis ready.
 
-### 2. Apply migrations
+## Database migrations and policy ingestion
+
+For host-run migrations:
 
     Push-Location backend
     uv run --no-project --python 3.12 --with-requirements requirements.txt python -m alembic upgrade head
@@ -242,74 +236,67 @@ Expected head:
 
     20260920_0004
 
-### 3. Ingest the synthetic policy corpus
+Ingest the synthetic policy corpus:
 
     uv run --no-project --python 3.12 --with-requirements backend/requirements.txt python scripts/ingest_policies.py
 
-The current corpus contains six ACTIVE documents and 50 chunks. Re-running
-ingestion should report unchanged content rather than create duplicates.
+The baseline corpus contains six ACTIVE policy documents and 50 chunks.
+Re-ingestion is content-hash idempotent.
 
-### 4. Run backend tests
+## Local validation
+
+Run the complete Python suite:
 
     $env:PYTHONPATH = "backend;."
-    uv run --no-project --python 3.12 --with-requirements backend/requirements.txt pytest -q backend/tests
+    uv run --no-project --python 3.12 --with-requirements backend/requirements.txt pytest -q tests backend/tests
 
-Latest validated result:
+Latest result:
 
-    116 passed
+    135 passed
 
-The suite includes unit, API, graph, PostgreSQL integration, HITL, gateway,
-observability, dataset, metric, runner, and report coverage. No live LangSmith,
-OpenAI, Ragas, or DeepEval call is required.
-
-### 5. Run frontend tests and build
+Run frontend tests and build:
 
     Push-Location frontend
     npm.cmd test -- --run
     npm.cmd run build
+    npm.cmd audit --omit=dev
     Pop-Location
 
-Latest validated result:
+Latest result:
 
     2 tests passed
     Vite production build passed
+    0 production dependency vulnerabilities
 
-### 6. Start the applications
+Build the production images:
 
-Backend:
+    docker build -f backend/Dockerfile -t policyflow-backend:local .
+    docker build -t policyflow-frontend:local frontend
 
-    Push-Location backend
-    uv run --no-project --python 3.12 --with-requirements requirements.txt python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+Validate Terraform without creating AWS resources:
 
-Frontend, in another terminal:
+    terraform -chdir=infrastructure/terraform fmt -check
+    terraform -chdir=infrastructure/terraform init -backend=false
+    terraform -chdir=infrastructure/terraform validate
 
-    Push-Location frontend
-    $env:VITE_API_BASE_URL = "http://localhost:8000"
-    npm.cmd run dev -- --host localhost
+If Terraform is not installed, use the documented Docker-based validation in
+[local validation](docs/local-validation.md).
 
-Open:
+## Primary APIs
 
-- Frontend: http://localhost:5173
-- Swagger UI: http://localhost:8000/docs
-- OpenAPI JSON: http://localhost:8000/openapi.json
-- Health: http://localhost:8000/health
-- Readiness: http://localhost:8000/ready
-
-## Primary API surfaces
-
-### Policy Q&A
+Policy Q&A:
 
 - POST /api/v1/policy/query
 - Returns GROUNDED only with verified citations
-- Returns a fixed INSUFFICIENT_INFORMATION response when support is inadequate
+- Safely returns INSUFFICIENT_INFORMATION when evidence is inadequate
 
-### Expenses
+Expense compliance:
 
 - POST /api/v1/expenses
 - GET /api/v1/expenses/{expense_id}
 - POST /api/v1/expenses/{expense_id}/clarifications
 
-### Exception and review
+Exception and review:
 
 - POST /api/v1/expenses/{expense_id}/exceptions
 - POST /api/v1/exceptions/{exception_id}/information
@@ -317,131 +304,118 @@ Open:
 - GET /api/v1/reviews/{exception_id}
 - POST /api/v1/reviews/{exception_id}/decision
 
-The demo authorization headers are X-Demo-Role: EMPLOYEE for employee actions
+Synthetic demo authorization uses X-Demo-Role: EMPLOYEE for employee actions
 and X-Demo-Role: REVIEWER with optional X-Demo-User for reviewer actions.
 
-## Phase 007 evaluation
+## Evaluation and tracing
 
-Keep PostgreSQL running and the policy corpus ingested.
-
-### Deterministic retrieval, citation, and decision gates
+Deterministic evaluation:
 
     $env:PYTHONPATH = "backend;."
     uv run --no-project --python 3.12 --with-requirements backend/requirements.txt python -m evaluation.run_retrieval --strategy hybrid
     uv run --no-project --python 3.12 --with-requirements backend/requirements.txt python -m evaluation.run_decisions
+    uv run --no-project --python 3.12 --with-requirements backend/requirements.txt python -m evaluation.benchmark
 
-Configured gates:
+Recorded Phase 007 gates:
 
-| Metric | Gate | Recorded result |
+| Metric | Required | Recorded |
 |---|---:|---:|
-| Precision@5 | at least 0.80 | 0.9091 |
-| Recall@10 | at least 0.90 | 0.9091 |
+| Precision at 5 | at least 0.80 | 0.9091 |
+| Recall at 10 | at least 0.90 | 0.9091 |
 | MRR | reported | 0.9091 |
 | Citation correctness | at least 0.95 | 1.0000 |
 | Valid-citation coverage | reported | 1.0000 |
 | Decision accuracy | exactly 1.00 | 1.0000 |
 
-### Retrieval benchmark
+Ragas and DeepEval are optional offline baselines. With evaluation disabled or
+credentials absent, their runners produce an explicit SKIP report. Generated
+reports stay under evaluation/reports and are ignored except for .gitkeep.
 
-    uv run --no-project --python 3.12 --with-requirements backend/requirements.txt python -m evaluation.benchmark
+LangSmith tracing is disabled by default and fails open. Exported metadata is
+bounded and excludes raw prompts, policy bodies, expense purpose, justification,
+reviewer comments, credentials, database URLs, provider payloads, and graph
+state.
 
-Recorded local results:
+## OpenSpec
 
-| Strategy | Precision@5 | Recall@10 | MRR | Average latency | Interpretation |
-|---|---:|---:|---:|---:|---|
-| Vector-only | 0.9091 | 0.9091 | 0.9091 | 185.26 ms | measured |
-| Hybrid | 0.9091 | 0.9091 | 0.9091 | 50.52 ms | measured |
-| Hybrid plus reranker | 0.9091 | 0.9091 | 0.9091 | 58.23 ms | fallback |
+Validate the active change and complete repository:
 
-Vector and hybrid quality tied in this run. The reranker arm used the deliberate
-unavailable-reranker fallback, so no reranking quality improvement is claimed.
-Latency is environment-specific and is not a permanent threshold.
-
-### Optional Ragas and DeepEval baselines
-
-    $env:ENABLE_AI_EVALUATION = "false"
-    uv run --no-project --python 3.12 --with-requirements backend/requirements.txt python -m evaluation.ragas.evaluate_rag
-    uv run --no-project --python 3.12 --with-requirements backend/requirements.txt python -m evaluation.deepeval.evaluate_agent
-    uv run --no-project --python 3.12 --with-requirements backend/requirements.txt python -m evaluation.summarize
-
-With evaluation disabled or credentials absent, both external evaluators write
-an explicit SKIP report and exit successfully. An enabled live baseline requires
-a private evaluator credential and a generated answer/context JSON bundle passed
-with --results. External scores remain baselines until thresholds are separately
-reviewed and approved.
-
-Generated reports are written under evaluation/reports and ignored by Git except
-for .gitkeep because timestamps and latency are environment-specific.
-
-## Optional LangSmith tracing
-
-Configure privately:
-
-    LANGSMITH_TRACING=true
-    LANGSMITH_API_KEY=<private key>
-    LANGSMITH_PROJECT=policyflow-ai-local
-    LANGSMITH_ENDPOINT=https://api.smith.langchain.com
-
-When disabled, missing credentials, or unavailable, the application continues
-with sanitized local structured logs. Exported metadata may include existing
-correlation IDs, stage names, counts, ranks, scores, model route/usage,
-durations, outcomes, and normalized errors.
-
-Exported metadata excludes full prompts/questions, policy bodies, expense
-purpose, justification, reviewer comments, authorization data, database
-connection secrets, raw provider payloads, and complete graph state.
-
-## OpenSpec validation
-
+    npx.cmd -y @fission-ai/openspec@1.10.0 validate 008-aws-deployment-hardening --strict
     npx.cmd -y @fission-ai/openspec@1.10.0 validate --specs --strict
     npx.cmd -y @fission-ai/openspec@1.10.0 validate --all --strict
     npx.cmd -y @fission-ai/openspec@1.10.0 list --json
 
-Expected state:
+Current expected state:
 
-- 7 canonical specs passed, 0 failed
-- 7 total OpenSpec items passed, 0 failed
-- no active changes
-- Phase 007 archived with 56/56 tasks complete
+- Phase 008: valid and 41/41 tasks complete
+- Canonical specs: 7 passed, 0 failed
+- Repository-wide: 8 passed, 0 failed
+- One active change: 008-aws-deployment-hardening
+- Phase 008 is ready for review and archive
 
-## CI behavior
+## AWS deployment boundary
 
-The standard CI workflow runs backend and frontend validation. The RAG
-evaluation workflow runs credential-free tracing, dataset, metric, decision,
-report, optional-evaluator-skip, and benchmark-smoke checks and uploads report
-artifacts. It does not require LangSmith or model credentials.
+The repository defines deployment artifacts but has not deployed them.
 
-Live external evaluation is a separately guarded manual workflow path.
+A real deployment requires:
+
+- approved AWS account, region, and cost budget;
+- remote Terraform state and GitHub OIDC bootstrap;
+- Cloudflare-managed hostname and regional ACM certificate;
+- privately populated Secrets Manager values;
+- reviewed Terraform plan and explicit apply approval;
+- post-apply RDS pgvector, ECS, ALB, CloudWatch, rollback, and public smoke
+  validation.
+
+Follow the [AWS deployment runbook](docs/aws-deployment.md). Never run
+Terraform apply or destroy without reviewing the exact plan and target account.
+
+## CI/CD behavior
+
+Pull-request and push CI runs:
+
+- pgvector PostgreSQL and Redis service containers;
+- Alembic migrations and the complete Python suite;
+- frontend tests and production build;
+- strict OpenSpec validation;
+- Terraform format and validation;
+- backend and frontend Docker builds;
+- deterministic evaluation gates and report artifacts.
+
+The protected manual AWS workflow uses GitHub OIDC and requires the confirmation
+value DEPLOY. It builds Git-SHA images, publishes them to ECR, runs a dedicated
+migration task, updates ECS services, waits for stability, runs public smoke
+validation, and restores prior task definitions after failure.
 
 ## Troubleshooting
 
-- Docker API unavailable: start Docker Desktop.
+- Docker API unavailable: start Docker Desktop and select Linux containers.
 - PostgreSQL connection failure: host processes use port 5433, not 5432.
 - Readiness returns 503: inspect PostgreSQL and Redis container health.
-- Missing tables or stale schema: run Alembic upgrade head from backend.
-- Empty retrieval results: verify six ACTIVE documents and 50 chunks exist.
-- First embedding/BGE run is slow: the configured model may be downloaded.
-- Policy Q&A returns 503: configure OPENAI_API_KEY for real generation or use
-  credential-free automated tests.
-- Reranker fallback appears: configure the selected reranker or treat the run as
-  fallback quality, not genuine reranked quality.
-- Live evaluator reports SKIP: explicitly enable evaluation, configure the
-  evaluator credential, and provide a --results bundle.
-- Windows async checkpoint issues: retain the documented SelectorEventLoop
+- Stale database schema: run Alembic upgrade head from backend.
+- Empty retrieval: ingest the six-policy synthetic corpus.
+- Policy Q&A returns 503: configure a private OpenAI key for real generation.
+- Reranker fallback: configure Cohere/local BGE or interpret results as fallback.
+- Evaluator reports SKIP: explicitly enable evaluation and provide credentials.
+- First local embedding or BGE run: allow time for model download.
+- Windows checkpoint errors: retain the documented SelectorEventLoop
   worker-thread path for psycopg under Uvicorn.
+- Terraform validate cannot find providers: run init -backend=false first.
 
 ## Documentation
 
-- [Consolidated local validation](docs/local-validation.md)
+- [Detailed local validation](docs/local-validation.md)
+- [AWS deployment and operations](docs/aws-deployment.md)
+- [Phase 008 implementation report](docs/phase-008-implementation-report.md)
 - [Phase 007 implementation report](docs/phase-007-implementation-report.md)
 - [Functional requirements](docs/architecture/PolicyFlow_AI_FRD_v1.0.docx)
 - [High-level design](docs/architecture/PolicyFlow_AI_HLD_v1.0.docx)
 - [Low-level design](docs/architecture/PolicyFlow_AI_LLD_v1.0.docx)
 - [Project structure](docs/architecture/PolicyFlowAI-project-structure.md)
 
-## Deferred scope
+## Remaining production scope
 
-Phase 008 and later may address AWS deployment hardening, CloudWatch,
-production dashboards and alerting, SSO/RBAC hardening, durable cost accounting,
-notifications, and other production controls. Phase 007 does not implement
-those capabilities.
+Phase 008 intentionally does not provide enterprise SSO/RBAC, multi-region
+active-active deployment, sophisticated autoscaling, automated disaster
+recovery, mandatory Cloudflare authenticated origin pulls, complex blue/green
+orchestration, or real-cloud evidence before an authorized deployment.

@@ -1,0 +1,12 @@
+aws_region      = "ap-south-1"
+environment     = "poc"
+domain_name     = "policyflow.example.com"
+certificate_arn = "arn:aws:acm:ap-south-1:123456789012:certificate/replace-me"
+image_tag       = "0123456789abcdef0123456789abcdef01234567"
+
+# Cost/safety defaults are intentionally small. Review before applying.
+db_instance_class             = "db.t4g.micro"
+redis_node_type               = "cache.t4g.micro"
+db_deletion_protection        = false
+skip_final_snapshot           = true
+force_delete_artifact_bucket  = false

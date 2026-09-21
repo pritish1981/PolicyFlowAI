@@ -10,7 +10,16 @@ class Settings(BaseSettings):
     redis_url: str
 
     cors_origins: str = "http://localhost:5173"
+    trusted_hosts: str = "localhost,127.0.0.1,testserver"
+    enable_api_docs: bool = True
     log_level: str = "INFO"
+    database_pool_size: int = Field(default=5, ge=1, le=50)
+    database_max_overflow: int = Field(default=5, ge=0, le=50)
+    database_pool_timeout_seconds: float = Field(default=10.0, gt=0, le=120)
+    database_pool_recycle_seconds: int = Field(default=1800, ge=60)
+    database_connect_timeout_seconds: int = Field(default=5, ge=1, le=60)
+    redis_connect_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
+    redis_socket_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
     policy_admin_token: str | None = None
     embedding_model: str = "jinaai/jina-embeddings-v2-small-en"
     embedding_dimension: int = 512
@@ -67,6 +76,10 @@ class Settings(BaseSettings):
     @property
     def allowed_origins(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def allowed_hosts(self) -> list[str]:
+        return [host.strip() for host in self.trusted_hosts.split(",") if host.strip()]
 
 
 settings = Settings()

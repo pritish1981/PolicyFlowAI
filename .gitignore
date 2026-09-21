@@ -30,6 +30,13 @@ htmlcov/
 evaluation/reports/*
 !evaluation/reports/.gitkeep
 
+# Terraform local state and plans
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+
 # Policy processing output
 policies/processed/*
 !policies/processed/.gitkeep
