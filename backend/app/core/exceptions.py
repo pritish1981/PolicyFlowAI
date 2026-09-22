@@ -37,6 +37,7 @@ class ProviderUnavailableError(ModelUnavailableError):
 
 class StructuredOutputValidationError(StructuredOutputError):
     code = "MODEL_OUTPUT_INVALID"
+    retryable = True
 
 
 class RerankerUnavailableError(PolicyFlowError):

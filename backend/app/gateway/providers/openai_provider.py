@@ -1,5 +1,5 @@
 """Lazy OpenAI structured-output provider adapter."""
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.gateway.models import ProviderRequest, ProviderResponse
 from app.core.exceptions import (
@@ -7,6 +7,7 @@ from app.core.exceptions import (
     ProviderRateLimitError,
     ProviderTimeoutError,
     ProviderUnavailableError,
+    StructuredOutputValidationError,
 )
 
 
@@ -45,6 +46,10 @@ class OpenAIProvider:
                 model=request.model, input=request.messages, text_format=request.output_schema,
                 max_output_tokens=request.max_output_tokens,
             )
+        except ValidationError as exc:
+            raise StructuredOutputValidationError(
+                "model provider returned invalid structured output"
+            ) from exc
         except Exception as exc:
             status = getattr(exc, "status_code", None)
             name = type(exc).__name__.lower()

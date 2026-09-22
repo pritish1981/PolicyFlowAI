@@ -44,7 +44,7 @@ class ModelGateway:
             except Exception as exc: last=exc
             if attempt>=retries or not is_transient_model_error(last): break
             await asyncio.sleep(retry_delay(attempt,settings.model_retry_base_delay_ms))
-        if isinstance(last, GatewayError):
+        if isinstance(last, (GatewayError, StructuredOutputValidationError)):
             raise last
         raise ModelUnavailableError("model provider is unavailable") from last
     async def invoke_structured(self,*,task:ModelTask,messages:list[dict[str,str]],output_schema:type[T],

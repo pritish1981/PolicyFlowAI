@@ -4,7 +4,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.api.routes.expenses import get_expense_service
-from app.core.exceptions import ModelUnavailableError
+from app.core.exceptions import GatewayError, ModelUnavailableError
 from app.core.exceptions import IdempotencyConflictError
 from app.main import app
 from app.schemas.expense import Decision, ExpenseAssessmentResponse
@@ -66,6 +66,28 @@ def test_provider_outage_is_sanitized_503():
                                    headers={"X-Request-ID": "outage-1"})
             assert response.status_code == 503
             assert response.json()["detail"]["request_id"] == "outage-1"
+            assert "secret" not in response.text
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_generic_gateway_failure_is_sanitized_503():
+    class InvalidProviderResponse:
+        async def create(self, *_args):
+            raise GatewayError("secret provider response detail")
+
+    app.dependency_overrides[get_expense_service] = lambda: InvalidProviderResponse()
+    try:
+        with TestClient(app) as client:
+            response = client.post("/api/v1/expenses", json={},
+                                   headers={"X-Request-ID": "gateway-1"})
+            assert response.status_code == 503
+            assert response.json()["detail"] == {
+                "code": "MODEL_GATEWAY_ERROR",
+                "message": "Expense assessment is temporarily unavailable.",
+                "request_id": "gateway-1",
+                "retryable": True,
+            }
             assert "secret" not in response.text
     finally:
         app.dependency_overrides.clear()

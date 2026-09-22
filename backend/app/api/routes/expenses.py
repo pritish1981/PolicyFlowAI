@@ -12,6 +12,7 @@ from app.api.routes.reviews import get_exception_service
 from app.core.config import settings
 from app.core.exceptions import (
     ExceptionIneligibleError,
+    GatewayError,
     IdempotencyConflictError,
     ModelUnavailableError,
     RerankerUnavailableError,
@@ -56,7 +57,7 @@ async def create_expense(request: ExpenseCreate,
         return await service.create(request, request_id, idempotency_key)
     except IdempotencyConflictError as exc:
         raise HTTPException(409, detail=str(exc)) from exc
-    except (ModelUnavailableError, RetrievalUnavailableError, RerankerUnavailableError,
+    except (ModelUnavailableError, GatewayError, RetrievalUnavailableError, RerankerUnavailableError,
             StructuredOutputError, SQLAlchemyError, PsycopgError, OSError) as exc:
         raise _failure(exc, request_id) from exc
 
@@ -73,7 +74,7 @@ async def clarify_expense(expense_id: UUID, request: ExpenseClarification,
         raise HTTPException(409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(422, detail=str(exc)) from exc
-    except (ModelUnavailableError, RetrievalUnavailableError, RerankerUnavailableError,
+    except (ModelUnavailableError, GatewayError, RetrievalUnavailableError, RerankerUnavailableError,
             StructuredOutputError, SQLAlchemyError, PsycopgError, OSError) as exc:
         raise _failure(exc, str(expense_id)) from exc
 

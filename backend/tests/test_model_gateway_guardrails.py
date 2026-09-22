@@ -228,3 +228,24 @@ def test_openai_adapter_maps_rate_limit_without_leaking_sdk_object(monkeypatch):
         ))
     assert raised.value.code == "MODEL_PROVIDER_RATE_LIMITED"
     assert "raw provider detail" not in str(raised.value)
+
+
+def test_openai_adapter_maps_empty_structured_output_and_gateway_retries(monkeypatch):
+    calls = 0
+
+    async def fail_parse(**_kwargs):
+        nonlocal calls
+        calls += 1
+        GroundedPolicyAnswer.model_validate_json("")
+
+    fake_client = SimpleNamespace(responses=SimpleNamespace(parse=fail_parse))
+    monkeypatch.setattr("openai.AsyncOpenAI", lambda **_kwargs: fake_client)
+    monkeypatch.setattr(settings, "model_max_retries", 1)
+    monkeypatch.setattr(settings, "model_retry_base_delay_ms", 0)
+
+    with pytest.raises(StructuredOutputValidationError) as raised:
+        invoke(OpenAIProvider("test-key", 1), evidence_items=[evidence()])
+
+    assert calls == 2
+    assert raised.value.code == "MODEL_OUTPUT_INVALID"
+    assert "EOF" not in str(raised.value)
